@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "solver.h"
+#include <time.h>
 
 void loadPuzzle(Sudoku *puzzle, const char *filename)
 {
@@ -76,6 +77,7 @@ int isSafe(const Sudoku *puzzle, int row, int col, int num)
 }
 int solveSudoku(Sudoku *puzzle)
 {
+    puzzle->recursiveCalls++;
     int row, col;
 
     if (!findEmptyCell(puzzle, &row, &col))
@@ -87,6 +89,7 @@ int solveSudoku(Sudoku *puzzle)
     {
         if (isSafe(puzzle, row, col, num))
         {
+            puzzle->backtracks++;
             puzzle->board[row][col] = num;
 
             if (solveSudoku(puzzle))
