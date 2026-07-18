@@ -49,3 +49,68 @@ void printPuzzle(const Sudoku *puzzle)
 
     printf("\n");
 }
+int isSafe(const Sudoku *puzzle, int row, int col, int num)
+{
+    for (int i = 0; i < SIZE; i++)
+    {
+        if (puzzle->board[row][i] == num)
+            return 0;
+    }
+    for (int i = 0; i < SIZE; i++)
+    {
+        if (puzzle->board[i][col] == num)
+            return 0;
+    }
+    int startRow = row - row % 3;
+    int startCol = col - col % 3;
+
+    for (int i = 0; i < 3; i++)
+    {
+        for (int j = 0; j < 3; j++)
+        {
+            if (puzzle->board[startRow + i][startCol + j] == num)
+                return 0;
+        }
+    }
+    return 1;
+}
+int solveSudoku(Sudoku *puzzle)
+{
+    int row, col;
+
+    if (!findEmptyCell(puzzle, &row, &col))
+    {
+        return 1;   // Puzzle solved
+    }
+
+    for (int num = 1; num <= 9; num++)
+    {
+        if (isSafe(puzzle, row, col, num))
+        {
+            puzzle->board[row][col] = num;
+
+            if (solveSudoku(puzzle))
+            {
+                return 1;
+            }
+
+            puzzle->board[row][col] = 0;
+        }
+    }
+
+    return 0;
+}
+int findEmptyCell(const Sudoku *puzzle, int *row, int *col)
+{
+    for (*row = 0; *row < SIZE; (*row)++)
+    {
+        for (*col = 0; *col < SIZE; (*col)++)
+        {
+            if (puzzle->board[*row][*col] == 0)
+            {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}

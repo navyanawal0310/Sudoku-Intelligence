@@ -11,4 +11,8 @@ typedef struct
 void loadPuzzle(Sudoku *puzzle, const char *filename);
 void printPuzzle(const Sudoku *puzzle);
 
+int findEmptyCell(const Sudoku *puzzle, int *row, int *col);
+int isSafe(const Sudoku *puzzle, int row, int col, int num);
+int solveSudoku(Sudoku *puzzle);
+
 #endif
