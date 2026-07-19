@@ -27,6 +27,8 @@ void loadPuzzle(Sudoku *puzzle, const char *filename)
     }
 
     fclose(fp);
+
+    initializeMetrics(puzzle);
 }
 void printPuzzle(const Sudoku *puzzle)
 {
@@ -50,8 +52,9 @@ void printPuzzle(const Sudoku *puzzle)
 
     printf("\n");
 }
-int isSafe(const Sudoku *puzzle, int row, int col, int num)
+int isSafe(Sudoku *puzzle, int row, int col, int num)
 {
+    puzzle->candidateChecks++;
     for (int i = 0; i < SIZE; i++)
     {
         if (puzzle->board[row][i] == num)
@@ -78,10 +81,18 @@ int isSafe(const Sudoku *puzzle, int row, int col, int num)
 int solveSudoku(Sudoku *puzzle)
 {
     puzzle->recursiveCalls++;
+    puzzle->currentDepth++;
+
+    if (puzzle->currentDepth > puzzle->maximumDepth)
+    {
+        puzzle->maximumDepth = puzzle->currentDepth;
+    }
+
     int row, col;
 
     if (!findEmptyCell(puzzle, &row, &col))
     {
+        puzzle->currentDepth--;
         return 1;   // Puzzle solved
     }
 
@@ -89,18 +100,22 @@ int solveSudoku(Sudoku *puzzle)
     {
         if (isSafe(puzzle, row, col, num))
         {
-            puzzle->backtracks++;
             puzzle->board[row][col] = num;
+            puzzle->successfulAssignments++;
 
             if (solveSudoku(puzzle))
             {
+                puzzle->currentDepth--;
                 return 1;
             }
 
             puzzle->board[row][col] = 0;
+            puzzle->backtracks++;
+            puzzle->failedAssignments++;
         }
     }
 
+    puzzle->currentDepth--;
     return 0;
 }
 int findEmptyCell(const Sudoku *puzzle, int *row, int *col)
@@ -116,4 +131,46 @@ int findEmptyCell(const Sudoku *puzzle, int *row, int *col)
         }
     }
     return 0;
+}
+void loadPuzzleFromString(Sudoku *puzzle, const char *str)
+{
+    int index = 0;
+
+    for (int i = 0; i < SIZE; i++)
+    {
+        for (int j = 0; j < SIZE; j++)
+        {
+            puzzle->board[i][j] = str[index++] - '0';
+        }
+    }
+    initializeMetrics(puzzle);
+}
+void initializeMetrics(Sudoku *puzzle)
+{
+    puzzle->recursiveCalls = 0;
+    puzzle->backtracks = 0;
+    puzzle->candidateChecks = 0;
+    puzzle->successfulAssignments = 0;
+    puzzle->failedAssignments = 0;
+
+    puzzle->currentDepth = 0;
+    puzzle->maximumDepth = 0;
+
+    puzzle->emptyCells = countEmptyCells(puzzle);
+}
+
+int countEmptyCells(const Sudoku *puzzle)
+{
+    int count = 0;
+
+    for(int i=0;i<SIZE;i++)
+    {
+        for(int j=0;j<SIZE;j++)
+        {
+            if(puzzle->board[i][j]==0)
+                count++;
+        }
+    }
+
+    return count;
 }

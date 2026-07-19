@@ -1,0 +1,19 @@
+Sudoku Intelligence Lab
+=======================
+
+Total puzzles: 5
+Average recursive calls: 6191.80
+Average backtracks: 6190.80
+Average execution time: 0.002400 sec
+
+Hardest Puzzle
+id                     5.000
+recursive_calls    19023.000
+backtracks         19022.000
+time_seconds           0.008
+
+Easiest Puzzle
+id                  2.0
+recursive_calls    55.0
+backtracks         54.0
+time_seconds        0.0

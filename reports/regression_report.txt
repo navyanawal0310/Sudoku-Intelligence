@@ -1,0 +1,16 @@
+REGRESSION ANALYSIS REPORT
+==================================================
+
+Correlation Ranking with Execution Time
+--------------------------------------------------
+
+execution_time_ms         1.0000
+recursive_calls           0.9866
+successful_assignments    0.9866
+candidate_checks          0.9866
+backtracks                0.9866
+failed_assignments        0.9866
+empty_cells               0.2162
+maximum_depth             0.2162
+id                        0.2031
+solved                    nan

@@ -6,15 +6,24 @@
 typedef struct
 {
     int board[SIZE][SIZE];
+
     long recursiveCalls;
     long backtracks;
-} Sudoku;
+    long candidateChecks;
+    long successfulAssignments;
+    long failedAssignments;
+    int currentDepth;
+    int maximumDepth;
+    int emptyCells;
+
+}Sudoku;
 
 void loadPuzzle(Sudoku *puzzle, const char *filename);
 void printPuzzle(const Sudoku *puzzle);
-int isSafe(const Sudoku *puzzle, int row, int col, int num);
+int isSafe(Sudoku *puzzle, int row, int col, int num);
 int solveSudoku(Sudoku *puzzle);
 int findEmptyCell(const Sudoku *puzzle, int *row, int *col);
+void loadPuzzleFromString(Sudoku *puzzle, const char *str);
+void initializeMetrics(Sudoku *puzzle);
+int countEmptyCells(const Sudoku *puzzle);
 #endif
-
-

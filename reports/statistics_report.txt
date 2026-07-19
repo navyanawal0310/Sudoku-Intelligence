@@ -1,0 +1,141 @@
+STATISTICAL ANALYSIS REPORT
+==================================================
+
+DATASET SUMMARY
+------------------------------
+Rows              : 1000
+Columns           : 10
+Missing Values    : 0
+Duplicate Rows    : 0
+
+DESCRIPTIVE STATISTICS
+------------------------------
+
+EMPTY_CELLS
+Count      : 1000
+Mean       : 51.3310
+Median     : 54.0000
+Mode       : 56
+Minimum    : 31
+Maximum    : 59
+Range      : 28
+Variance   : 44.6161
+Std Dev    : 6.6795
+Q1         : 48.5000
+Q3         : 56.0000
+IQR        : 7.5000
+Skewness   : -1.1534
+Kurtosis   : -0.1906
+
+RECURSIVE_CALLS
+Count      : 1000
+Mean       : 34091.7760
+Median     : 3825.0000
+Mode       : 45
+Minimum    : 35
+Maximum    : 3028511
+Range      : 3028476
+Variance   : 16479369698.1920
+Std Dev    : 128371.9973
+Q1         : 303.5000
+Q3         : 19289.0000
+IQR        : 18985.5000
+Skewness   : 14.5502
+Kurtosis   : 305.5795
+
+BACKTRACKS
+Count      : 1000
+Mean       : 34039.4450
+Median     : 3773.0000
+Mode       : 4
+Minimum    : 0
+Maximum    : 3028451
+Range      : 3028451
+Variance   : 16479033039.8688
+Std Dev    : 128370.6861
+Q1         : 254.0000
+Q3         : 19232.2500
+IQR        : 18978.2500
+Skewness   : 14.5505
+Kurtosis   : 305.5887
+
+CANDIDATE_CHECKS
+Count      : 1000
+Mean       : 306611.1910
+Median     : 34212.5000
+Mode       : 163
+Minimum    : 163
+Maximum    : 27256359
+Range      : 27256196
+Variance   : 1334817760022.9915
+Std Dev    : 1155343.1352
+Q1         : 2529.0000
+Q3         : 173366.7500
+IQR        : 170837.7500
+Skewness   : 14.5504
+Kurtosis   : 305.5835
+
+SUCCESSFUL_ASSIGNMENTS
+Count      : 1000
+Mean       : 34090.7760
+Median     : 3824.0000
+Mode       : 44
+Minimum    : 34
+Maximum    : 3028510
+Range      : 3028476
+Variance   : 16479369698.1920
+Std Dev    : 128371.9973
+Q1         : 302.5000
+Q3         : 19288.0000
+IQR        : 18985.5000
+Skewness   : 14.5502
+Kurtosis   : 305.5795
+
+FAILED_ASSIGNMENTS
+Count      : 1000
+Mean       : 34039.4450
+Median     : 3773.0000
+Mode       : 4
+Minimum    : 0
+Maximum    : 3028451
+Range      : 3028451
+Variance   : 16479033039.8688
+Std Dev    : 128370.6861
+Q1         : 254.0000
+Q3         : 19232.2500
+IQR        : 18978.2500
+Skewness   : 14.5505
+Kurtosis   : 305.5887
+
+MAXIMUM_DEPTH
+Count      : 1000
+Mean       : 52.3310
+Median     : 55.0000
+Mode       : 57
+Minimum    : 32
+Maximum    : 60
+Range      : 28
+Variance   : 44.6161
+Std Dev    : 6.6795
+Q1         : 49.5000
+Q3         : 57.0000
+IQR        : 7.5000
+Skewness   : -1.1534
+Kurtosis   : -0.1906
+
+EXECUTION_TIME_MS
+Count      : 1000
+Mean       : 14.8710
+Median     : 2.0000
+Mode       : 0.0
+Minimum    : 0.0
+Maximum    : 1140.0
+Range      : 1140.0
+Variance   : 2472.2786
+Std Dev    : 49.7220
+Q1         : 0.0000
+Q3         : 9.2500
+IQR        : 9.2500
+Skewness   : 13.4323
+Kurtosis   : 270.6598
+

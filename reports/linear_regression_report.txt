@@ -1,0 +1,15 @@
+LINEAR REGRESSION REPORT
+==================================================
+
+Slope      : 0.00038215
+Intercept  : 1.84269964
+
+MODEL PERFORMANCE
+------------------------------
+MAE        : 3.6381
+RMSE       : 8.0958
+R²         : 0.9735
+
+INTERPRETATION
+------------------------------
+Excellent fit. Recursive calls are a very strong predictor of execution time.
