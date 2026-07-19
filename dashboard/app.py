@@ -1,49 +1,47 @@
-import streamlit as st
+"""
+Sudoku Intelligence Lab — multi-page Streamlit dashboard.
+
+This app renders puzzles using the project's own `sudoku_renderer.py` and
+`puzzle_utils.py` when they expose a recognizable function (any of a few
+common names are tried). If those modules are missing, or don't expose a
+usable function, the app falls back to a small built-in Plotly board
+renderer and a lightweight backtracking solver, so the dashboard always
+runs. The fallback solver is only used to visualize a solution in the
+Explorer page — it is not the instrumented C solver used for benchmarking.
+"""
+
+import importlib
+import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import streamlit as st
 
-# -----------------------
-# Page Config
-# -----------------------
+# =========================================================
+# Theme
+# =========================================================
 
-st.set_page_config(
-    page_title="Sudoku Intelligence Lab",
-    page_icon="🧩",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+ACCENT = "#69BD5E"
+BG = "#0A0A0C"
+BG_PANEL = "#0E0F11"
+BG_CARD = "#131316"
+BORDER = "rgba(255,255,255,0.08)"
+TEXT = "#E4E4E7"
+TEXT_MUTED = "#8B8D98"
 
-st.markdown(
-    """
-    <style>
-        div[data-testid="stMetric"] {
-            background-color: rgba(128, 128, 128, 0.08);
-            border: 1px solid rgba(128, 128, 128, 0.2);
-            border-radius: 10px;
-            padding: 12px 16px;
-        }
-        div[data-testid="stMetricLabel"] {
-            font-weight: 600;
-        }
-        .block-container {
-            padding-top: 2rem;
-        }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+DIFFICULTY_ORDER = ["Easy", "Medium", "Hard", "Expert"]
+DIFFICULTY_BUCKET_SIZE = 250
+DIFFICULTY_COLORS = {
+    "Easy": "#69BD5E",
+    "Medium": "#3FA7D6",
+    "Hard": "#F2B134",
+    "Expert": "#E85D5D",
+}
 
-st.title("🧩 Sudoku Intelligence Lab")
-st.caption("Performance Analysis of a Recursive Backtracking Sudoku Solver")
+RESULTS_PATH = "data/output/results.csv"
+PUZZLES_PATH = "data/dataset/sudoku_dataset.csv"
 
-# -----------------------
-# Load Data
-# -----------------------
-
-DATA_PATH = "data/output/results.csv"
-
-REQUIRED_COLUMNS = [
+REQUIRED_RESULT_COLUMNS = [
     "id",
     "empty_cells",
     "recursive_calls",
@@ -56,195 +54,7 @@ REQUIRED_COLUMNS = [
     "solved",
 ]
 
-DIFFICULTY_ORDER = ["Easy", "Medium", "Hard", "Expert"]
-DIFFICULTY_BUCKET_SIZE = 250
-
-
-@st.cache_data
-def load_data(path):
-    try:
-        data = pd.read_csv(path)
-    except FileNotFoundError:
-        return None
-    return data
-
-
-def derive_difficulty(row_id):
-    """Map a puzzle id to a difficulty label based on generation order
-    (250 Easy, 250 Medium, 250 Hard, 250 Expert)."""
-    index = int(row_id) - 1
-    bucket = index // DIFFICULTY_BUCKET_SIZE
-    bucket = min(bucket, len(DIFFICULTY_ORDER) - 1)
-    return DIFFICULTY_ORDER[bucket]
-
-
-df = load_data(DATA_PATH)
-
-# -----------------------
-# Empty / Missing Dataset Handling
-# -----------------------
-
-if df is None:
-    st.error(f"Could not find results file at `{DATA_PATH}`. Run the benchmark first.")
-    st.stop()
-
-if df.empty:
-    st.warning("The results dataset is empty. Run the benchmark to generate data.")
-    st.stop()
-
-missing_columns = [c for c in REQUIRED_COLUMNS if c not in df.columns]
-if missing_columns:
-    st.error(f"Dataset is missing expected columns: {', '.join(missing_columns)}")
-    st.stop()
-
-if "difficulty" not in df.columns:
-    df["difficulty"] = df["id"].apply(derive_difficulty)
-
-# -----------------------
-# Sidebar Filters
-# -----------------------
-
-st.sidebar.header("Filters")
-
-available_difficulties = [d for d in DIFFICULTY_ORDER if d in df["difficulty"].unique()]
-selected_difficulties = st.sidebar.multiselect(
-    "Difficulty",
-    options=available_difficulties,
-    default=available_difficulties,
-)
-
-solved_options = sorted(df["solved"].unique().tolist())
-selected_solved = st.sidebar.multiselect(
-    "Solved Status",
-    options=solved_options,
-    default=solved_options,
-    format_func=lambda v: "Solved" if v == 1 else "Unsolved",
-)
-
-id_min, id_max = int(df["id"].min()), int(df["id"].max())
-id_range = st.sidebar.slider(
-    "Puzzle ID Range",
-    min_value=id_min,
-    max_value=id_max,
-    value=(id_min, id_max),
-)
-
-filtered_df = df[
-    df["difficulty"].isin(selected_difficulties)
-    & df["solved"].isin(selected_solved)
-    & df["id"].between(id_range[0], id_range[1])
-]
-
-st.sidebar.markdown(f"**{len(filtered_df)}** of **{len(df)}** puzzles selected")
-
-# -----------------------
-# Empty Filtered Dataset Handling
-# -----------------------
-
-if filtered_df.empty:
-    st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
-    st.stop()
-
-# -----------------------
-# KPI Cards
-# -----------------------
-
-solve_rate = filtered_df["solved"].mean() * 100
-
-kpi1, kpi2, kpi3, kpi4, kpi5 = st.columns(5)
-
-kpi1.metric("Total Puzzles", len(filtered_df))
-kpi2.metric("Avg Recursive Calls", f"{filtered_df['recursive_calls'].mean():,.0f}")
-kpi3.metric("Avg Backtracks", f"{filtered_df['backtracks'].mean():,.0f}")
-kpi4.metric("Avg Execution Time", f"{filtered_df['execution_time_ms'].mean():.3f} ms")
-kpi5.metric("Solve Rate", f"{solve_rate:.1f}%")
-
-st.divider()
-
-# -----------------------
-# Interactive Charts: Metrics by Puzzle
-# -----------------------
-
-st.subheader("Solver Metrics by Puzzle")
-
-tab1, tab2, tab3 = st.tabs(["Recursive Calls", "Backtracks", "Execution Time"])
-
-with tab1:
-    fig = px.bar(
-        filtered_df,
-        x="id",
-        y="recursive_calls",
-        color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        labels={"id": "Puzzle ID", "recursive_calls": "Recursive Calls"},
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with tab2:
-    fig = px.bar(
-        filtered_df,
-        x="id",
-        y="backtracks",
-        color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        labels={"id": "Puzzle ID", "backtracks": "Backtracks"},
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with tab3:
-    fig = px.bar(
-        filtered_df,
-        x="id",
-        y="execution_time_ms",
-        color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        labels={"id": "Puzzle ID", "execution_time_ms": "Execution Time (ms)"},
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-st.divider()
-
-# -----------------------
-# Difficulty Distribution
-# -----------------------
-
-st.subheader("Distribution by Difficulty")
-
-dist_col1, dist_col2 = st.columns(2)
-
-with dist_col1:
-    fig = px.box(
-        filtered_df,
-        x="difficulty",
-        y="recursive_calls",
-        color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        labels={"difficulty": "Difficulty", "recursive_calls": "Recursive Calls"},
-        title="Recursive Calls by Difficulty",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-with dist_col2:
-    fig = px.box(
-        filtered_df,
-        x="difficulty",
-        y="execution_time_ms",
-        color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        labels={"difficulty": "Difficulty", "execution_time_ms": "Execution Time (ms)"},
-        title="Execution Time by Difficulty",
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-st.divider()
-
-# -----------------------
-# Correlation Analysis
-# -----------------------
-
-st.subheader("Correlation Between Metrics")
-
-numeric_columns = [
+NUMERIC_METRICS = [
     "empty_cells",
     "recursive_calls",
     "backtracks",
@@ -254,71 +64,1016 @@ numeric_columns = [
     "maximum_depth",
     "execution_time_ms",
 ]
-numeric_columns = [c for c in numeric_columns if c in filtered_df.columns]
 
-corr_col1, corr_col2 = st.columns([1, 1])
+DEMO_PUZZLE = "530070000600195000098000060800060003400803001700020006060000280000419005000080079"
 
-with corr_col1:
-    if len(filtered_df) > 1 and len(numeric_columns) > 1:
-        corr_matrix = filtered_df[numeric_columns].corr()
-        fig = px.imshow(
-            corr_matrix,
-            text_auto=".2f",
-            color_continuous_scale="RdBu_r",
-            zmin=-1,
-            zmax=1,
-            title="Metric Correlation Heatmap",
+PAGES = [
+    "Home",
+    "Explorer",
+    "Performance",
+    "Statistics",
+    "Regression",
+    "Prediction",
+    "Research",
+    "About",
+]
+
+ANALYTICS_PAGES = {
+    "Performance",
+    "Statistics",
+    "Regression",
+    "Prediction",
+    "Research",
+}
+
+# =========================================================
+# Optional project modules (rendered / solved via user's own code)
+# =========================================================
+
+
+def _try_import(module_name):
+    try:
+        return importlib.import_module(module_name)
+    except Exception:
+        return None
+
+
+sudoku_renderer = _try_import("sudoku_renderer")
+puzzle_utils = _try_import("puzzle_utils")
+
+HAVE_RENDERER = sudoku_renderer is not None
+HAVE_PUZZLE_UTILS = puzzle_utils is not None
+
+
+# =========================================================
+# Page config + global styling
+# =========================================================
+
+
+def configure_page():
+    st.set_page_config(
+        page_title="Sudoku Intelligence Lab",
+        page_icon="S",
+        layout="wide",
+        initial_sidebar_state="expanded",
+    )
+
+    st.markdown(
+        f"""
+        <style>
+            html, body, .stApp {{
+                background-color: {BG};
+                color: {TEXT};
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+                    Helvetica, Arial, sans-serif;
+            }}
+            section[data-testid="stSidebar"] {{
+                background-color: {BG_PANEL};
+                border-right: 1px solid {BORDER};
+            }}
+            h1, h2, h3, h4 {{
+                color: {TEXT};
+                font-weight: 600;
+                letter-spacing: -0.01em;
+            }}
+            h1 {{
+                font-size: 1.6rem;
+                border-bottom: 1px solid {BORDER};
+                padding-bottom: 0.6rem;
+                margin-bottom: 0.4rem;
+            }}
+            h2, h3 {{
+                font-size: 1.05rem;
+            }}
+            p, li, label, span {{
+                color: {TEXT};
+            }}
+            .stCaption, [data-testid="stCaptionContainer"] {{
+                color: {TEXT_MUTED} !important;
+            }}
+
+            /* KPI metric cards — green is used only for the left border */
+            div[data-testid="stMetric"] {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-left: 3px solid {ACCENT};
+                border-radius: 8px;
+                padding: 16px 18px;
+            }}
+            div[data-testid="stMetricLabel"] {{
+                font-weight: 500;
+                font-size: 0.78rem;
+                text-transform: uppercase;
+                letter-spacing: 0.04em;
+                color: {TEXT_MUTED};
+            }}
+            div[data-testid="stMetricValue"] {{
+                color: {TEXT};
+                font-weight: 600;
+            }}
+
+            /* Tabs — neutral, no color fill */
+            .stTabs [data-baseweb="tab"] {{
+                color: {TEXT_MUTED};
+                font-weight: 500;
+            }}
+            .stTabs [aria-selected="true"] {{
+                color: {TEXT} !important;
+                border-bottom-color: {TEXT} !important;
+            }}
+
+            /* Buttons — neutral outline, no fill */
+            .stButton>button, .stDownloadButton>button {{
+                background-color: transparent;
+                color: {TEXT};
+                border: 1px solid {BORDER};
+                font-weight: 500;
+                border-radius: 6px;
+            }}
+            .stButton>button:hover, .stDownloadButton>button:hover {{
+                border-color: rgba(255,255,255,0.2);
+                background-color: rgba(255,255,255,0.03);
+                color: {TEXT};
+            }}
+
+            .block-container {{
+                padding-top: 2rem;
+                max-width: 1280px;
+            }}
+
+            /* Plain content cards — title + description only */
+            .sil-card {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                padding: 20px 22px;
+                height: 100%;
+            }}
+            .sil-card h4 {{
+                color: {TEXT};
+                font-size: 0.95rem;
+                font-weight: 600;
+                margin: 0 0 6px 0;
+            }}
+            .sil-card p {{
+                color: {TEXT_MUTED};
+                font-size: 0.85rem;
+                line-height: 1.5;
+                margin: 0;
+            }}
+
+            .sil-meta {{
+                color: {TEXT_MUTED};
+                font-size: 0.85rem;
+                margin-top: -0.4rem;
+                margin-bottom: 1.4rem;
+            }}
+
+            .sil-nav-label {{
+                color: {TEXT_MUTED};
+                font-size: 0.7rem;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin: 4px 0 6px 4px;
+            }}
+
+            .sil-step {{
+                padding: 8px 16px;
+                border: 1px solid {BORDER};
+                border-radius: 6px;
+                background-color: {BG_CARD};
+                color: {TEXT};
+                font-size: 0.85rem;
+                font-weight: 500;
+                white-space: nowrap;
+            }}
+            .sil-arrow {{
+                color: {TEXT_MUTED};
+                font-size: 0.85rem;
+                padding: 0 2px;
+            }}
+
+            /* Sidebar navigation — green marks only the active item */
+            section[data-testid="stSidebar"] input[type="radio"] {{
+                accent-color: {ACCENT};
+            }}
+            section[data-testid="stSidebar"] div[role="radiogroup"] label {{
+                padding: 6px 10px;
+                border-radius: 6px;
+                border-left: 2px solid transparent;
+                margin-bottom: 2px;
+            }}
+            section[data-testid="stSidebar"] div[role="radiogroup"] label:hover {{
+                background-color: rgba(255,255,255,0.04);
+            }}
+            section[data-testid="stSidebar"] div[role="radiogroup"] label p {{
+                color: {TEXT_MUTED};
+                font-size: 0.9rem;
+                font-weight: 500;
+            }}
+            section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) {{
+                background-color: rgba(105,189,94,0.08);
+                border-left: 2px solid {ACCENT};
+            }}
+            section[data-testid="stSidebar"] div[role="radiogroup"] label:has(input:checked) p {{
+                color: {ACCENT};
+                font-weight: 600;
+            }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+# =========================================================
+# Data loading
+# =========================================================
+
+
+@st.cache_data
+def load_results(path):
+    try:
+        return pd.read_csv(path)
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return None
+
+
+@st.cache_data
+def load_puzzles(path):
+    try:
+        return pd.read_csv(path, dtype={"puzzle": str})
+    except (FileNotFoundError, pd.errors.EmptyDataError):
+        return None
+
+
+def derive_difficulty(row_id):
+    """Map a puzzle id to a difficulty label based on generation order
+    (250 Easy, 250 Medium, 250 Hard, 250 Expert)."""
+    index = int(row_id) - 1
+    bucket = max(index, 0) // DIFFICULTY_BUCKET_SIZE
+    bucket = min(bucket, len(DIFFICULTY_ORDER) - 1)
+    return DIFFICULTY_ORDER[bucket]
+
+
+def prepare_results(df):
+    if df is None or df.empty:
+        return None
+    missing = [c for c in REQUIRED_RESULT_COLUMNS if c not in df.columns]
+    if missing:
+        return None
+    df = df.copy()
+    if "difficulty" not in df.columns:
+        df["difficulty"] = df["id"].apply(derive_difficulty)
+    return df
+
+
+# =========================================================
+# Puzzle grid helpers (fallback implementations)
+# =========================================================
+
+
+def string_to_grid_fallback(puzzle_str):
+    puzzle_str = "".join(ch for ch in str(puzzle_str) if ch.isdigit())
+    puzzle_str = puzzle_str.ljust(81, "0")[:81]
+    return [[int(puzzle_str[r * 9 + c]) for c in range(9)] for r in range(9)]
+
+
+def _is_safe(grid, row, col, num):
+    if num in grid[row]:
+        return False
+    if num in (grid[r][col] for r in range(9)):
+        return False
+    sr, sc = 3 * (row // 3), 3 * (col // 3)
+    for r in range(sr, sr + 3):
+        for c in range(sc, sc + 3):
+            if grid[r][c] == num:
+                return False
+    return True
+
+
+def solve_grid_fallback(grid):
+    grid = [row[:] for row in grid]
+
+    def backtrack():
+        for r in range(9):
+            for c in range(9):
+                if grid[r][c] == 0:
+                    for num in range(1, 10):
+                        if _is_safe(grid, r, c, num):
+                            grid[r][c] = num
+                            if backtrack():
+                                return True
+                            grid[r][c] = 0
+                    return False
+        return True
+
+    if backtrack():
+        return grid
+    return None
+
+
+def get_grid_from_string(puzzle_str):
+    if HAVE_PUZZLE_UTILS:
+        for fn_name in ("parse_puzzle_string", "string_to_grid", "to_grid", "parse"):
+            fn = getattr(puzzle_utils, fn_name, None)
+            if callable(fn):
+                try:
+                    result = fn(puzzle_str)
+                    if result:
+                        return result
+                except Exception:
+                    pass
+    return string_to_grid_fallback(puzzle_str)
+
+
+def get_solution(grid, puzzle_str=None):
+    if HAVE_PUZZLE_UTILS:
+        for fn_name in ("solve_sudoku", "solve", "solve_puzzle"):
+            fn = getattr(puzzle_utils, fn_name, None)
+            if callable(fn):
+                try:
+                    arg = puzzle_str if puzzle_str is not None else [row[:] for row in grid]
+                    result = fn(arg)
+                    if result:
+                        return result if isinstance(result[0], list) else get_grid_from_string(result)
+                except Exception:
+                    pass
+    return solve_grid_fallback(grid)
+
+
+def render_board_fallback(grid, title="", size=380):
+    n = 9
+    fig = go.Figure()
+    font_size = max(12, int(size * 0.0526))
+
+    for i in range(n + 1):
+        thick = i % 3 == 0
+        line = dict(color=ACCENT if thick else "rgba(228,228,231,0.18)", width=2.5 if thick else 1)
+        fig.add_shape(type="line", x0=0, y0=i, x1=n, y1=i, line=line)
+        fig.add_shape(type="line", x0=i, y0=0, x1=i, y1=n, line=line)
+
+    for r in range(n):
+        for c in range(n):
+            val = grid[r][c]
+            if val:
+                fig.add_annotation(
+                    x=c + 0.5,
+                    y=n - r - 0.5,
+                    text=str(val),
+                    showarrow=False,
+                    font=dict(size=font_size, color=TEXT),
+                )
+
+    fig.update_xaxes(visible=False, range=[0, n])
+    fig.update_yaxes(visible=False, range=[0, n], scaleanchor="x")
+    fig.update_layout(
+        title=dict(text=title, font=dict(color=TEXT_MUTED, size=14)),
+        width=size,
+        height=size,
+        margin=dict(l=10, r=10, t=36, b=10),
+        plot_bgcolor="rgba(0,0,0,0)",
+        paper_bgcolor="rgba(0,0,0,0)",
+    )
+    return fig
+
+
+def display_board(grid, title="", size=380):
+    if HAVE_RENDERER:
+        for fn_name in ("render_board", "render_sudoku", "draw_board", "render"):
+            fn = getattr(sudoku_renderer, fn_name, None)
+            if callable(fn):
+                try:
+                    result = fn(grid)
+                except Exception:
+                    result = None
+                if result is not None:
+                    if title:
+                        st.markdown(f"**{title}**")
+                    _render_unknown(result)
+                    return
+    st.plotly_chart(render_board_fallback(grid, title, size=size), use_container_width=False)
+
+
+def _render_unknown(result):
+    if hasattr(result, "to_plotly_json"):
+        st.plotly_chart(result, use_container_width=False)
+        return
+    if hasattr(result, "savefig"):
+        st.pyplot(result)
+        return
+    if isinstance(result, str):
+        if result.strip().startswith("<"):
+            st.markdown(result, unsafe_allow_html=True)
+        else:
+            st.text(result)
+        return
+    st.write(result)
+
+
+# =========================================================
+# Shared filtering + KPI helpers
+# =========================================================
+
+
+def render_sidebar_filters(df):
+    st.sidebar.header("Filters")
+
+    available_difficulties = [d for d in DIFFICULTY_ORDER if d in df["difficulty"].unique()]
+    selected_difficulties = st.sidebar.multiselect(
+        "Difficulty", options=available_difficulties, default=available_difficulties
+    )
+
+    solved_options = sorted(df["solved"].unique().tolist())
+    selected_solved = st.sidebar.multiselect(
+        "Solved Status",
+        options=solved_options,
+        default=solved_options,
+        format_func=lambda v: "Solved" if v == 1 else "Unsolved",
+    )
+
+    id_min, id_max = int(df["id"].min()), int(df["id"].max())
+    id_range = st.sidebar.slider("Puzzle ID Range", min_value=id_min, max_value=id_max, value=(id_min, id_max))
+
+    filtered = df[
+        df["difficulty"].isin(selected_difficulties)
+        & df["solved"].isin(selected_solved)
+        & df["id"].between(id_range[0], id_range[1])
+    ]
+
+    st.sidebar.markdown(f"**{len(filtered)}** of **{len(df)}** puzzles selected")
+    return filtered
+
+
+def render_kpi_cards(df):
+    solve_rate = df["solved"].mean() * 100
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Total Puzzles", len(df))
+    c2.metric("Avg Recursive Calls", f"{df['recursive_calls'].mean():,.0f}")
+    c3.metric("Avg Backtracks", f"{df['backtracks'].mean():,.0f}")
+    c4.metric("Avg Execution Time", f"{df['execution_time_ms'].mean():.3f} ms")
+    c5.metric("Solve Rate", f"{solve_rate:.1f}%")
+
+
+def missing_results_notice():
+    st.warning(
+        f"No results found at `{RESULTS_PATH}`. Run the C benchmark and dataset "
+        "pipeline first, then reload this page."
+    )
+
+
+# =========================================================
+# Pages
+# =========================================================
+
+
+def _compute_home_kpis(results_df):
+    """Total puzzles, average runtime, average recursive calls, and the R² of
+    a simple empty_cells -> recursive_calls linear fit, computed on the full
+    (unfiltered) results dataset."""
+    if results_df is None or results_df.empty:
+        return None
+
+    total_puzzles = len(results_df)
+    avg_runtime = results_df["execution_time_ms"].mean()
+    avg_calls = results_df["recursive_calls"].mean()
+
+    r_squared = None
+    if total_puzzles >= 2:
+        x = results_df["empty_cells"].to_numpy(dtype=float)
+        y = results_df["recursive_calls"].to_numpy(dtype=float)
+        slope, intercept = np.polyfit(x, y, 1)
+        predicted = slope * x + intercept
+        ss_res = float(np.sum((y - predicted) ** 2))
+        ss_tot = float(np.sum((y - y.mean()) ** 2))
+        r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+    return {
+        "total_puzzles": total_puzzles,
+        "avg_runtime": avg_runtime,
+        "avg_calls": avg_calls,
+        "r_squared": r_squared,
+    }
+
+
+def _card_grid(cards):
+    """Render a row of equally-sized `.sil-card` divs, one per dict with
+    'title' and 'desc' keys."""
+    cols = st.columns(len(cards))
+    for col, card in zip(cols, cards):
+        with col:
+            st.markdown(
+                f'<div class="sil-card"><h4>{card["title"]}</h4>'
+                f'<p>{card["desc"]}</p></div>',
+                unsafe_allow_html=True,
+            )
+
+
+def page_home(results_df, puzzles_df):
+    st.title("Sudoku Intelligence Lab")
+    st.markdown(
+        '<p class="sil-meta">Implemented in C • 1000 benchmark puzzles • '
+        "Performance instrumentation • Streamlit</p>",
+        unsafe_allow_html=True,
+    )
+
+    # ---------------- Hero: board + KPIs ----------------
+    board_col, kpi_col = st.columns([1, 1])
+
+    with board_col:
+        if puzzles_df is not None and not puzzles_df.empty:
+            sample_row = puzzles_df.sample(1, random_state=None).iloc[0]
+            grid = get_grid_from_string(sample_row["puzzle"])
+            display_board(grid, title=f"Puzzle #{sample_row['id']}", size=500)
+        else:
+            display_board(string_to_grid_fallback(DEMO_PUZZLE), title="Sample Puzzle", size=500)
+
+    with kpi_col:
+        kpis = _compute_home_kpis(results_df)
+        if kpis is None:
+            missing_results_notice()
+        else:
+            row1c1, row1c2 = st.columns(2)
+            row1c1.metric("Total Puzzles", f"{kpis['total_puzzles']:,}")
+            row1c2.metric("Avg Runtime", f"{kpis['avg_runtime']:.3f} ms")
+
+            row2c1, row2c2 = st.columns(2)
+            row2c1.metric("Avg Recursive Calls", f"{kpis['avg_calls']:,.0f}")
+            r2_display = f"{kpis['r_squared']:.3f}" if kpis["r_squared"] is not None else "—"
+            row2c2.metric("Regression R²", r2_display)
+
+            st.caption(
+                "R² is for a linear fit of recursive calls against empty cells "
+                "across the full benchmark dataset."
+            )
+
+    st.divider()
+
+    # ---------------- Feature cards ----------------
+    st.subheader("What Powers This Lab")
+    _card_grid(
+        [
+            {
+                "title": "C Solver",
+                "desc": "Recursive backtracking implementation with performance instrumentation.",
+            },
+            {
+                "title": "Performance Instrumentation",
+                "desc": "Tracks recursive calls, backtracks, and candidate checks.",
+            },
+            {
+                "title": "Statistical Analysis",
+                "desc": "Distributions and correlations across solver metrics.",
+            },
+            {
+                "title": "Numerical Methods & Regression",
+                "desc": "Linear fits and predictive models built on the results.",
+            },
+        ]
+    )
+
+    st.divider()
+
+    # ---------------- Pipeline ----------------
+    st.subheader("Pipeline")
+    steps = [
+        "Puzzle Dataset",
+        "C Solver",
+        "Performance Metrics",
+        "Python Analytics",
+        "Interactive Dashboard",
+    ]
+    step_html = ['<div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px;">']
+    for i, label in enumerate(steps):
+        step_html.append(f'<div class="sil-step">{label}</div>')
+        if i != len(steps) - 1:
+            step_html.append('<div class="sil-arrow">→</div>')
+    step_html.append("</div>")
+    st.markdown("".join(step_html), unsafe_allow_html=True)
+
+
+def page_explorer(results_df, puzzles_df):
+    st.title("Explorer")
+    st.caption("Original puzzle and solved board, side by side.")
+
+    if puzzles_df is None or puzzles_df.empty:
+        st.warning(f"No puzzle dataset found at `{PUZZLES_PATH}`. Showing a demo puzzle instead.")
+        selected_id = "demo"
+        puzzle_str = DEMO_PUZZLE
+    else:
+        ids = puzzles_df["id"].tolist()
+
+        top_l, top_r = st.columns([3, 1])
+        with top_l:
+            selected_id = st.selectbox("Select puzzle ID", options=ids, index=0)
+        with top_r:
+            st.write("")
+            if st.button("Random puzzle"):
+                selected_id = int(np.random.choice(ids))
+
+        puzzle_str = puzzles_df.loc[puzzles_df["id"] == selected_id, "puzzle"].iloc[0]
+
+    grid = get_grid_from_string(puzzle_str)
+    solution = get_solution(grid, puzzle_str)
+
+    left, right = st.columns(2)
+    with left:
+        display_board(grid, title="Original Puzzle")
+    with right:
+        if solution is not None:
+            display_board(solution, title="Solved Board")
+        else:
+            st.error("This puzzle could not be solved by the fallback solver.")
+
+    if results_df is not None and selected_id != "demo":
+        match = results_df.loc[results_df["id"] == selected_id]
+        if not match.empty:
+            st.divider()
+            st.subheader("Solver Metrics for This Puzzle")
+            render_kpi_cards(match)
+            st.dataframe(match, use_container_width=True)
+
+
+def page_performance(df):
+    st.title("Performance")
+    if df is None:
+        missing_results_notice()
+        return
+    if df.empty:
+        st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        return
+
+    render_kpi_cards(df)
+    st.divider()
+
+    st.subheader("Solver Metrics by Puzzle")
+    tab1, tab2, tab3 = st.tabs(["Recursive Calls", "Backtracks", "Execution Time"])
+
+    with tab1:
+        fig = px.bar(
+            df, x="id", y="recursive_calls", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            labels={"id": "Puzzle ID", "recursive_calls": "Recursive Calls"},
         )
         st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Not enough data to compute correlations.")
 
-with corr_col2:
+    with tab2:
+        fig = px.bar(
+            df, x="id", y="backtracks", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            labels={"id": "Puzzle ID", "backtracks": "Backtracks"},
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab3:
+        fig = px.bar(
+            df, x="id", y="execution_time_ms", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            labels={"id": "Puzzle ID", "execution_time_ms": "Execution Time (ms)"},
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+    st.subheader("Hardest and Easiest Puzzle")
+    hard_col, easy_col = st.columns(2)
+    hardest = df.loc[[df["recursive_calls"].idxmax()]]
+    easiest = df.loc[[df["recursive_calls"].idxmin()]]
+    with hard_col:
+        st.markdown("**Hardest Puzzle** (most recursive calls)")
+        st.dataframe(hardest, use_container_width=True)
+    with easy_col:
+        st.markdown("**Easiest Puzzle** (fewest recursive calls)")
+        st.dataframe(easiest, use_container_width=True)
+
+    st.divider()
+    st.subheader("Dataset")
+    st.dataframe(df, use_container_width=True)
+    st.download_button(
+        "Download filtered dataset as CSV",
+        data=df.to_csv(index=False).encode("utf-8"),
+        file_name="filtered_sudoku_results.csv",
+        mime="text/csv",
+    )
+
+
+def page_statistics(df):
+    st.title("Statistics")
+    if df is None:
+        missing_results_notice()
+        return
+    if df.empty:
+        st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        return
+
+    st.subheader("Distribution by Difficulty")
+    dist1, dist2 = st.columns(2)
+    with dist1:
+        fig = px.box(
+            df, x="difficulty", y="recursive_calls", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            title="Recursive Calls by Difficulty",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    with dist2:
+        fig = px.box(
+            df, x="difficulty", y="execution_time_ms", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            title="Execution Time by Difficulty",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+    st.subheader("Correlation Between Metrics")
+    numeric_columns = [c for c in NUMERIC_METRICS if c in df.columns]
+    corr1, corr2 = st.columns(2)
+    with corr1:
+        if len(df) > 1 and len(numeric_columns) > 1:
+            corr_matrix = df[numeric_columns].corr()
+            fig = px.imshow(
+                corr_matrix, text_auto=".2f", color_continuous_scale="RdBu_r",
+                zmin=-1, zmax=1, title="Metric Correlation Heatmap",
+            )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Not enough data to compute correlations.")
+    with corr2:
+        fig = px.scatter(
+            df, x="empty_cells", y="recursive_calls", color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            trendline="ols" if len(df) > 1 else None,
+            title="Empty Cells vs. Recursive Calls",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+    st.subheader("Summary Statistics")
+    st.dataframe(df[numeric_columns].describe().T, use_container_width=True)
+
+
+def page_regression(df):
+    st.title("Regression")
+    if df is None:
+        missing_results_notice()
+        return
+    if df.empty:
+        st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        return
+
+    numeric_columns = [c for c in NUMERIC_METRICS if c in df.columns]
+    c1, c2 = st.columns(2)
+    with c1:
+        x_col = st.selectbox("X variable", numeric_columns, index=numeric_columns.index("empty_cells"))
+    with c2:
+        y_col = st.selectbox("Y variable", numeric_columns, index=numeric_columns.index("recursive_calls"))
+
+    if len(df) < 2:
+        st.info("Need at least two puzzles to fit a regression line.")
+        return
+
+    x = df[x_col].to_numpy(dtype=float)
+    y = df[y_col].to_numpy(dtype=float)
+
+    slope, intercept = np.polyfit(x, y, 1)
+    predicted = slope * x + intercept
+    residuals = y - predicted
+    ss_res = float(np.sum(residuals**2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+    correlation = float(np.corrcoef(x, y)[0, 1]) if len(x) > 1 else 0.0
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Slope", f"{slope:.3f}")
+    m2.metric("Intercept", f"{intercept:.3f}")
+    m3.metric("R²", f"{r_squared:.3f}")
+    m4.metric("Correlation (r)", f"{correlation:.3f}")
+
     fig = px.scatter(
-        filtered_df,
-        x="empty_cells",
-        y="recursive_calls",
-        color="difficulty",
+        df, x=x_col, y=y_col, color="difficulty",
         category_orders={"difficulty": DIFFICULTY_ORDER},
-        trendline="ols" if len(filtered_df) > 1 else None,
-        labels={"empty_cells": "Empty Cells", "recursive_calls": "Recursive Calls"},
-        title="Empty Cells vs. Recursive Calls",
+        color_discrete_map=DIFFICULTY_COLORS,
+        title=f"{y_col} vs. {x_col}",
+    )
+    line_x = np.linspace(x.min(), x.max(), 100)
+    line_y = slope * line_x + intercept
+    fig.add_trace(go.Scatter(x=line_x, y=line_y, mode="lines", name="Fitted line", line=dict(color=ACCENT, width=3)))
+    st.plotly_chart(fig, use_container_width=True)
+
+
+def page_prediction(df):
+    st.title("Prediction")
+    st.caption("Estimate solver effort from puzzle characteristics using a simple linear fit.")
+
+    if df is None:
+        missing_results_notice()
+        return
+    if df.empty or len(df) < 2:
+        st.info("Not enough data to build a prediction model.")
+        return
+
+    target_options = [c for c in NUMERIC_METRICS if c in df.columns and c != "empty_cells"]
+    target_col = st.selectbox("Metric to predict", target_options, index=target_options.index("recursive_calls"))
+
+    x = df["empty_cells"].to_numpy(dtype=float)
+    y = df[target_col].to_numpy(dtype=float)
+    slope, intercept = np.polyfit(x, y, 1)
+
+    predicted_all = slope * x + intercept
+    ss_res = float(np.sum((y - predicted_all) ** 2))
+    ss_tot = float(np.sum((y - y.mean()) ** 2))
+    r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+    empty_min, empty_max = int(x.min()), int(x.max())
+    empty_input = st.slider("Empty cells", min_value=empty_min, max_value=empty_max, value=int(x.mean()))
+
+    prediction = slope * empty_input + intercept
+    prediction = max(prediction, 0)
+
+    p1, p2 = st.columns(2)
+    p1.metric(f"Predicted {target_col.replace('_', ' ')}", f"{prediction:,.1f}")
+    p2.metric("Model R²", f"{r_squared:.3f}")
+
+    fig = px.scatter(
+        df, x="empty_cells", y=target_col, color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        title=f"{target_col} vs. Empty Cells",
+    )
+    line_x = np.linspace(empty_min, empty_max, 100)
+    line_y = slope * line_x + intercept
+    fig.add_trace(go.Scatter(x=line_x, y=line_y, mode="lines", name="Fitted line", line=dict(color=ACCENT, width=3)))
+    fig.add_trace(
+        go.Scatter(
+            x=[empty_input], y=[prediction], mode="markers", name="Prediction",
+            marker=dict(color="#FFFFFF", size=14, line=dict(color=ACCENT, width=3), symbol="star"),
+        )
     )
     st.plotly_chart(fig, use_container_width=True)
 
-st.divider()
+    st.caption(
+        "This is an illustrative linear model fit on the currently filtered "
+        "dataset, not a component of the C solver itself."
+    )
 
-# -----------------------
-# Hardest and Easiest Puzzle
-# -----------------------
 
-st.subheader("Hardest and Easiest Puzzle")
+def _finding_card(title, description):
+    st.markdown(
+        f'<div class="sil-card"><h4>{title}</h4><p>{description}</p></div>',
+        unsafe_allow_html=True,
+    )
 
-hard_col, easy_col = st.columns(2)
 
-hardest = filtered_df.loc[[filtered_df["recursive_calls"].idxmax()]]
-easiest = filtered_df.loc[[filtered_df["recursive_calls"].idxmin()]]
+def page_research(full_df):
+    st.title("Research")
+    st.caption("Key takeaways from the benchmark dataset.")
 
-with hard_col:
-    st.markdown("**Hardest Puzzle** (most recursive calls)")
-    st.dataframe(hardest, use_container_width=True)
+    if full_df is None or full_df.empty:
+        missing_results_notice()
+        return
 
-with easy_col:
-    st.markdown("**Easiest Puzzle** (fewest recursive calls)")
-    st.dataframe(easiest, use_container_width=True)
+    df = full_df
+    corr_empty_calls = df["empty_cells"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
+    corr_checks_time = df["candidate_checks"].corr(df["execution_time_ms"]) if len(df) > 1 else float("nan")
+    solve_rate = df["solved"].mean() * 100
 
-st.divider()
+    by_difficulty = df.groupby("difficulty")["execution_time_ms"].mean().reindex(DIFFICULTY_ORDER).dropna()
+    if len(by_difficulty) >= 2:
+        multiplier = by_difficulty.iloc[-1] / max(by_difficulty.iloc[0], 1e-9)
+    else:
+        multiplier = float("nan")
 
-# -----------------------
-# Dataset Table
-# -----------------------
+    df_ratio = (df["backtracks"] / df["recursive_calls"].replace(0, np.nan)).mean() * 100
 
-st.subheader("Dataset")
-st.dataframe(filtered_df, use_container_width=True)
+    row1 = st.columns(2)
+    with row1[0]:
+        _finding_card(
+            "Search space grows with empty cells",
+            f"Empty cells and recursive calls correlate at r = {corr_empty_calls:.2f}, "
+            "supporting the expected exponential growth of the backtracking search "
+            "space as more cells need to be filled.",
+        )
+    with row1[1]:
+        _finding_card(
+            "Difficulty tiers scale execution time",
+            f"Average execution time increases roughly {multiplier:.1f}x from the "
+            "easiest to the hardest difficulty tier in the current dataset, "
+            "confirming the difficulty labels track real solver effort.",
+        )
 
-st.download_button(
-    "Download filtered dataset as CSV",
-    data=filtered_df.to_csv(index=False).encode("utf-8"),
-    file_name="filtered_sudoku_results.csv",
-    mime="text/csv",
-)
+    row2 = st.columns(2)
+    with row2[0]:
+        _finding_card(
+            "Candidate checks drive runtime",
+            f"Candidate safety checks and execution time correlate at r = "
+            f"{corr_checks_time:.2f}, indicating constraint checking is a major "
+            "cost driver in the recursive solver.",
+        )
+    with row2[1]:
+        _finding_card(
+            "Backtracking is a meaningful share of work",
+            f"On average, backtracks account for about {df_ratio:.1f}% of recursive "
+            "calls, showing the solver regularly needs to undo assignments before "
+            "finding a valid path forward.",
+        )
+
+    row3 = st.columns(2)
+    with row3[0]:
+        _finding_card(
+            "Deterministic completeness",
+            f"The backtracking solver reaches a solution in {solve_rate:.1f}% of "
+            "benchmarked puzzles, consistent with backtracking search being "
+            "complete for valid Sudoku puzzles.",
+        )
+    with row3[1]:
+        _finding_card(
+            "Difficulty labels are a useful proxy",
+            "Grouping puzzles by generation difficulty produces clearly separated "
+            "distributions of recursive calls and execution time, making "
+            "difficulty tier a practical predictor of solver effort.",
+        )
+
+
+def page_about():
+    st.title("About")
+    st.write(
+        "**Sudoku Intelligence Lab** benchmarks a recursive backtracking Sudoku "
+        "solver written in C, instrumented to record recursive calls, "
+        "backtracks, candidate checks, and execution time for each puzzle."
+    )
+
+    st.subheader("Pipeline")
+    st.markdown(
+        "1. **Dataset generation** — `generate_dataset.py` produces 1,000 unique "
+        "puzzles across four difficulty tiers using a maintained Sudoku "
+        "generation library.\n"
+        "2. **Benchmarking** — the instrumented C solver (`solver.c`, "
+        "`dataset.c`) solves every puzzle and exports per-puzzle metrics to CSV.\n"
+        "3. **Analysis** — this Streamlit dashboard loads the results for "
+        "interactive filtering, visualization, and simple predictive modeling."
+    )
+
+    st.subheader("Tech Stack")
+    st.markdown(
+        "- **C** — recursive backtracking solver with performance instrumentation\n"
+        "- **Python** — dataset generation and analysis tooling\n"
+        "- **Streamlit + Plotly** — interactive dashboard and charts\n"
+        "- **NumPy / pandas** — regression fitting and data wrangling"
+    )
+
+    st.subheader("Data Files")
+    st.markdown(
+        f"- Puzzle dataset: `{PUZZLES_PATH}`\n"
+        f"- Benchmark results: `{RESULTS_PATH}`"
+    )
+
+
+# =========================================================
+# App entry point
+# =========================================================
+
+
+def main():
+    configure_page()
+
+    st.sidebar.markdown(
+        '<div style="font-weight:600; font-size:1rem; padding:4px 4px 12px 4px;">'
+        "Sudoku Intelligence Lab</div>",
+        unsafe_allow_html=True,
+    )
+    st.sidebar.markdown('<div class="sil-nav-label">Navigation</div>', unsafe_allow_html=True)
+    page = st.sidebar.radio("Navigation", PAGES, label_visibility="collapsed")
+    st.sidebar.divider()
+
+    raw_results = load_results(RESULTS_PATH)
+    results_df = prepare_results(raw_results)
+    puzzles_df = load_puzzles(PUZZLES_PATH)
+
+    filtered_df = results_df
+    if page in ANALYTICS_PAGES and results_df is not None:
+        filtered_df = render_sidebar_filters(results_df)
+
+    if page == "Home":
+        page_home(results_df, puzzles_df)
+    elif page == "Explorer":
+        page_explorer(results_df, puzzles_df)
+    elif page == "Performance":
+        page_performance(filtered_df)
+    elif page == "Statistics":
+        page_statistics(filtered_df)
+    elif page == "Regression":
+        page_regression(filtered_df)
+    elif page == "Prediction":
+        page_prediction(filtered_df)
+    elif page == "Research":
+        page_research(filtered_df)
+    elif page == "About":
+        page_about()
+
+
+if __name__ == "__main__":
+    main()

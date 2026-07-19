@@ -1,4 +1,4 @@
-Sudoku Intelligence Lab
+Algorithm Performance Laboratory
 =======================
 
 Total puzzles: 5
