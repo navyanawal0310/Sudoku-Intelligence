@@ -806,9 +806,30 @@ def page_home(results_df, puzzles_df):
 
 
 def page_explorer(results_df, puzzles_df):
-    st.title("Explorer")
-    st.caption("Original puzzle and solved board, side by side.")
+    # Page-scoped typography boost (~10% larger) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-explorer h1 {{ font-size: 1.76rem; }}
+            .sil-explorer .stCaption, .sil-explorer [data-testid="stCaptionContainer"] {{
+                font-size: 0.94rem !important;
+            }}
+            .sil-explorer .sil-section-label {{ font-size: 0.79rem; }}
+            .sil-explorer .stSelectbox label {{ font-size: 1.1rem; font-weight: 600; }}
+            .sil-explorer div[data-baseweb="select"] {{ font-size: 1.1rem; }}
+            .sil-explorer .stButton>button {{ font-size: 1.05rem; padding: 0.5rem 1rem; }}
+            .sil-explorer div[data-testid="stMetricLabel"] {{ font-size: 0.86rem; }}
+            .sil-explorer div[data-testid="stMetricValue"] {{ font-size: 1.65rem; }}
+        </style>
+        <div class="sil-explorer">
+        """,
+        unsafe_allow_html=True,
+    )
 
+    st.title("Explorer")
+    st.caption("Inspect a single benchmarked puzzle: original, solved, and solver metrics.")
+
+    # ---------------- Puzzle selector ----------------
     if puzzles_df is None or puzzles_df.empty:
         st.warning(f"No puzzle dataset found at `{PUZZLES_PATH}`. Showing a demo puzzle instead.")
         selected_id = "demo"
@@ -816,7 +837,7 @@ def page_explorer(results_df, puzzles_df):
     else:
         ids = puzzles_df["id"].tolist()
 
-        top_l, top_r = st.columns([3, 1])
+        top_l, top_r = st.columns([4, 1])
         with top_l:
             selected_id = st.selectbox("Select puzzle ID", options=ids, index=0)
         with top_r:
@@ -829,22 +850,52 @@ def page_explorer(results_df, puzzles_df):
     grid = get_grid_from_string(puzzle_str)
     solution = get_solution(grid, puzzle_str)
 
+    match = None
+    if results_df is not None and selected_id != "demo":
+        candidate = results_df.loc[results_df["id"] == selected_id]
+        if not candidate.empty:
+            match = candidate.iloc[0]
+
+    # ---------------- Metadata ----------------
+    st.markdown('<div class="sil-section-label">Puzzle Metadata</div>', unsafe_allow_html=True)
+    meta_id = "Demo" if selected_id == "demo" else selected_id
+    meta_difficulty = derive_difficulty(selected_id) if selected_id != "demo" else "—"
+    if match is not None:
+        meta_solved = "Solved" if match["solved"] == 1 else "Not Solved"
+    else:
+        meta_solved = "—"
+
+    meta1, meta2, meta3 = st.columns(3)
+    meta1.metric("Puzzle ID", meta_id)
+    meta2.metric("Difficulty", meta_difficulty)
+    meta3.metric("Status", meta_solved)
+
+    st.divider()
+
+    # ---------------- Boards, equal size, side by side ----------------
     left, right = st.columns(2)
     with left:
-        display_board(grid, title="Original Puzzle")
+        display_board(grid, title="Original Puzzle", size=420)
     with right:
         if solution is not None:
-            display_board(solution, title="Solved Board")
+            display_board(solution, title="Solved Puzzle", size=420)
         else:
             st.error("This puzzle could not be solved by the fallback solver.")
 
-    if results_df is not None and selected_id != "demo":
-        match = results_df.loc[results_df["id"] == selected_id]
-        if not match.empty:
-            st.divider()
-            st.subheader("Solver Metrics for This Puzzle")
-            render_kpi_cards(match)
-            st.dataframe(match, use_container_width=True)
+    # ---------------- Performance Summary ----------------
+    st.divider()
+    st.markdown('<div class="sil-section-label">Performance Summary</div>', unsafe_allow_html=True)
+    if match is None:
+        missing_results_notice()
+    else:
+        p1, p2, p3, p4, p5 = st.columns(5)
+        p1.metric("Recursive Calls", f"{match['recursive_calls']:,}")
+        p2.metric("Backtracks", f"{match['backtracks']:,}")
+        p3.metric("Candidate Checks", f"{match['candidate_checks']:,}")
+        p4.metric("Execution Time", f"{match['execution_time_ms']:.3f} ms")
+        p5.metric("Maximum Depth", f"{match['maximum_depth']:,}")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_performance(df):
