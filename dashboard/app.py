@@ -117,10 +117,26 @@ def configure_page():
         layout="wide",
         initial_sidebar_state="expanded",
     )
-
+    
     st.markdown(
         f"""
         <style>
+            header[data-testid="stHeader"] {{
+            background-color: transparent;
+            height: 0;
+        }}
+
+            div[data-testid="stToolbar"] {{
+                display: none;
+            }}
+
+            div[data-testid="stDecoration"] {{
+                display: none;
+            }}
+
+            .block-container {{
+                padding-top: 1rem;
+            }}
             html, body, .stApp {{
                 background-color: {BG};
                 color: {TEXT};
@@ -238,20 +254,65 @@ def configure_page():
                 margin: 4px 0 6px 4px;
             }}
 
-            .sil-step {{
-                padding: 8px 16px;
-                border: 1px solid {BORDER};
-                border-radius: 6px;
-                background-color: {BG_CARD};
-                color: {TEXT};
-                font-size: 0.85rem;
-                font-weight: 500;
-                white-space: nowrap;
+            /* Capabilities — hairline spec grid, typography only */
+            .sil-spec-grid {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                border-top: 1px solid {BORDER};
+                border-left: 1px solid {BORDER};
             }}
-            .sil-arrow {{
+            .sil-spec-cell {{
+                padding: 20px 24px;
+                border-right: 1px solid {BORDER};
+                border-bottom: 1px solid {BORDER};
+            }}
+            .sil-spec-cell h4 {{
+                margin: 0 0 6px 0;
+                font-size: 0.92rem;
+                font-weight: 600;
+                color: {TEXT};
+            }}
+            .sil-spec-cell p {{
+                margin: 0;
+                font-size: 0.83rem;
                 color: {TEXT_MUTED};
-                font-size: 0.85rem;
-                padding: 0 2px;
+                line-height: 1.5;
+            }}
+
+            /* Key findings — elegant cards, green marks the edge only */
+            .sil-finding {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-left: 3px solid {ACCENT};
+                border-radius: 6px;
+                padding: 18px 20px;
+                height: 100%;
+            }}
+            .sil-finding h4 {{
+                margin: 0 0 6px 0;
+                font-size: 0.88rem;
+                font-weight: 600;
+                color: {TEXT};
+            }}
+            .sil-finding p {{
+                margin: 0;
+                font-size: 0.82rem;
+                color: {TEXT_MUTED};
+                line-height: 1.5;
+            }}
+
+            .sil-section-label {{
+                color: {TEXT_MUTED};
+                font-size: 0.72rem;
+                font-weight: 600;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin: 0 0 12px 2px;
+            }}
+
+            .sil-hero-panel {{
+                border-left: 1px solid {BORDER};
+                padding-left: 28px;
             }}
 
             /* Sidebar navigation — green marks only the active item */
@@ -556,17 +617,58 @@ def _compute_home_kpis(results_df):
     }
 
 
-def _card_grid(cards):
-    """Render a row of equally-sized `.sil-card` divs, one per dict with
-    'title' and 'desc' keys."""
+def _card_grid(cards, css_class="sil-card"):
+    """Render a row of equally-sized cards, one per dict with 'title' and
+    'desc' keys, using the given CSS class."""
     cols = st.columns(len(cards))
     for col, card in zip(cols, cards):
         with col:
             st.markdown(
-                f'<div class="sil-card"><h4>{card["title"]}</h4>'
+                f'<div class="{css_class}"><h4>{card["title"]}</h4>'
                 f'<p>{card["desc"]}</p></div>',
                 unsafe_allow_html=True,
             )
+
+
+def _pipeline_diagram_svg(steps):
+    box_w, box_h, gap, margin = 150, 44, 32, 10
+    n = len(steps)
+    total_w = n * box_w + (n - 1) * gap
+    canvas_w = total_w + 2 * margin
+    canvas_h = box_h + 2 * margin
+    cy = margin + box_h / 2
+
+    parts = [
+        f'<svg viewBox="0 0 {canvas_w} {canvas_h}" width="100%" '
+        f'style="max-width:{canvas_w}px; display:block;" '
+        'xmlns="http://www.w3.org/2000/svg">'
+    ]
+
+    for i, label in enumerate(steps):
+        x = margin + i * (box_w + gap)
+        parts.append(
+            f'<rect x="{x}" y="{margin}" width="{box_w}" height="{box_h}" rx="6" '
+            f'fill="{BG_CARD}" stroke="rgba(255,255,255,0.16)" stroke-width="1" />'
+        )
+        parts.append(
+            f'<text x="{x + box_w / 2}" y="{cy + 4}" text-anchor="middle" '
+            f'font-family="-apple-system, Segoe UI, Roboto, Arial, sans-serif" '
+            f'font-size="12.5" font-weight="500" fill="{TEXT}">{label}</text>'
+        )
+        if i != n - 1:
+            line_x0 = x + box_w
+            line_x1 = x + box_w + gap - 6
+            parts.append(
+                f'<line x1="{line_x0}" y1="{cy}" x2="{line_x1}" y2="{cy}" '
+                f'stroke="{ACCENT}" stroke-width="1.5" />'
+            )
+            parts.append(
+                f'<polygon points="{line_x1},{cy - 4} {line_x1 + 6},{cy} {line_x1},{cy + 4}" '
+                f'fill="{ACCENT}" />'
+            )
+
+    parts.append("</svg>")
+    return "".join(parts)
 
 
 def page_home(results_df, puzzles_df):
@@ -578,9 +680,10 @@ def page_home(results_df, puzzles_df):
     )
 
     # ---------------- Hero: board + KPIs ----------------
-    board_col, kpi_col = st.columns([1, 1])
+    board_col, kpi_col = st.columns([1, 1], gap="large")
 
     with board_col:
+        st.markdown('<div class="sil-section-label">Puzzle Preview</div>', unsafe_allow_html=True)
         if puzzles_df is not None and not puzzles_df.empty:
             sample_row = puzzles_df.sample(1, random_state=None).iloc[0]
             grid = get_grid_from_string(sample_row["puzzle"])
@@ -589,15 +692,18 @@ def page_home(results_df, puzzles_df):
             display_board(string_to_grid_fallback(DEMO_PUZZLE), title="Sample Puzzle", size=500)
 
     with kpi_col:
+        st.markdown('<div class="sil-hero-panel">', unsafe_allow_html=True)
+        st.markdown('<div class="sil-section-label">Overview</div>', unsafe_allow_html=True)
+
         kpis = _compute_home_kpis(results_df)
         if kpis is None:
             missing_results_notice()
         else:
-            row1c1, row1c2 = st.columns(2)
+            row1c1, row1c2 = st.columns(2, gap="medium")
             row1c1.metric("Total Puzzles", f"{kpis['total_puzzles']:,}")
             row1c2.metric("Avg Runtime", f"{kpis['avg_runtime']:.3f} ms")
 
-            row2c1, row2c2 = st.columns(2)
+            row2c1, row2c2 = st.columns(2, gap="medium")
             row2c1.metric("Avg Recursive Calls", f"{kpis['avg_calls']:,.0f}")
             r2_display = f"{kpis['r_squared']:.3f}" if kpis["r_squared"] is not None else "—"
             row2c2.metric("Regression R²", r2_display)
@@ -607,35 +713,88 @@ def page_home(results_df, puzzles_df):
                 "across the full benchmark dataset."
             )
 
-    st.divider()
-
-    # ---------------- Feature cards ----------------
-    st.subheader("What Powers This Lab")
-    _card_grid(
-        [
-            {
-                "title": "C Solver",
-                "desc": "Recursive backtracking implementation with performance instrumentation.",
-            },
-            {
-                "title": "Performance Instrumentation",
-                "desc": "Tracks recursive calls, backtracks, and candidate checks.",
-            },
-            {
-                "title": "Statistical Analysis",
-                "desc": "Distributions and correlations across solver metrics.",
-            },
-            {
-                "title": "Numerical Methods & Regression",
-                "desc": "Linear fits and predictive models built on the results.",
-            },
-        ]
-    )
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.divider()
 
-    # ---------------- Pipeline ----------------
-    st.subheader("Pipeline")
+    # ---------------- Capabilities: typography only, no cards ----------------
+    st.markdown('<div class="sil-section-label">Capabilities</div>', unsafe_allow_html=True)
+    capabilities = [
+        {
+            "title": "C Solver",
+            "desc": "Recursive backtracking implementation with performance instrumentation.",
+        },
+        {
+            "title": "Performance Instrumentation",
+            "desc": "Tracks recursive calls, backtracks, and candidate checks.",
+        },
+        {
+            "title": "Statistical Analysis",
+            "desc": "Distributions and correlations across solver metrics.",
+        },
+        {
+            "title": "Numerical Methods & Regression",
+            "desc": "Linear fits and predictive models built on the results.",
+        },
+    ]
+    spec_html = ['<div class="sil-spec-grid">']
+    for item in capabilities:
+        spec_html.append(
+            f'<div class="sil-spec-cell"><h4>{item["title"]}</h4><p>{item["desc"]}</p></div>'
+        )
+    spec_html.append("</div>")
+    st.markdown("".join(spec_html), unsafe_allow_html=True)
+
+    st.divider()
+
+    # ---------------- Key Findings ----------------
+    st.markdown('<div class="sil-section-label">Key Findings</div>', unsafe_allow_html=True)
+    if results_df is None or results_df.empty:
+        missing_results_notice()
+    else:
+        corr_empty_calls = (
+            results_df["empty_cells"].corr(results_df["recursive_calls"])
+            if len(results_df) > 1
+            else float("nan")
+        )
+        by_difficulty = (
+            results_df.groupby("difficulty")["execution_time_ms"]
+            .mean()
+            .reindex(DIFFICULTY_ORDER)
+            .dropna()
+        )
+        if len(by_difficulty) >= 2:
+            multiplier = by_difficulty.iloc[-1] / max(by_difficulty.iloc[0], 1e-9)
+            multiplier_text = f"~{multiplier:.1f}x higher execution time for Expert versus Easy puzzles."
+        else:
+            multiplier_text = "Not enough difficulty tiers in the current data to compare."
+
+        backtrack_ratio = (
+            results_df["backtracks"] / results_df["recursive_calls"].replace(0, np.nan)
+        ).mean() * 100
+
+        _card_grid(
+            [
+                {
+                    "title": "Search space scales with puzzle complexity",
+                    "desc": f"Empty cells and recursive calls correlate at r = {corr_empty_calls:.2f}.",
+                },
+                {
+                    "title": "Execution time scales with difficulty",
+                    "desc": multiplier_text,
+                },
+                {
+                    "title": "Backtracking overhead",
+                    "desc": f"Backtracks account for about {backtrack_ratio:.1f}% of recursive calls on average.",
+                },
+            ],
+            css_class="sil-finding",
+        )
+
+    st.divider()
+
+    # ---------------- Architecture ----------------
+    st.markdown('<div class="sil-section-label">Architecture</div>', unsafe_allow_html=True)
     steps = [
         "Puzzle Dataset",
         "C Solver",
@@ -643,13 +802,7 @@ def page_home(results_df, puzzles_df):
         "Python Analytics",
         "Interactive Dashboard",
     ]
-    step_html = ['<div style="display:flex; align-items:center; flex-wrap:wrap; gap:10px;">']
-    for i, label in enumerate(steps):
-        step_html.append(f'<div class="sil-step">{label}</div>')
-        if i != len(steps) - 1:
-            step_html.append('<div class="sil-arrow">→</div>')
-    step_html.append("</div>")
-    st.markdown("".join(step_html), unsafe_allow_html=True)
+    st.markdown(_pipeline_diagram_svg(steps), unsafe_allow_html=True)
 
 
 def page_explorer(results_df, puzzles_df):
