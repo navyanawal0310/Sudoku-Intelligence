@@ -899,68 +899,222 @@ def page_explorer(results_df, puzzles_df):
 
 
 def page_performance(df):
+    # Page-scoped typography boost (~10%) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-performance h1 {{ font-size: 1.76rem; }}
+            .sil-performance h2, .sil-performance h3 {{ font-size: 1.16rem; }}
+            .sil-performance .sil-section-label {{ font-size: 0.79rem; }}
+            .sil-performance .stCaption, .sil-performance [data-testid="stCaptionContainer"] {{
+                font-size: 0.94rem !important;
+            }}
+            .sil-performance div[data-testid="stMetricLabel"] {{ font-size: 0.86rem; }}
+            .sil-performance div[data-testid="stMetricValue"] {{ font-size: 1.65rem; }}
+            .sil-performance p, .sil-performance li {{ font-size: 1rem; }}
+
+            .sil-finding-text {{
+                margin: 4px 0 10px 0;
+                font-size: 0.92rem;
+                line-height: 1.5;
+            }}
+            .sil-finding-text .label {{
+                color: {TEXT_MUTED};
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.72rem;
+                letter-spacing: 0.05em;
+                margin-right: 6px;
+            }}
+            .sil-chart-caption {{
+                color: {TEXT_MUTED};
+                font-size: 0.82rem;
+                margin-top: -6px;
+                margin-bottom: 4px;
+            }}
+
+            .sil-highlight {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-left: 3px solid {ACCENT};
+                border-radius: 8px;
+                padding: 18px 20px;
+                height: 100%;
+            }}
+            .sil-highlight-title {{
+                font-weight: 600;
+                font-size: 1rem;
+                color: {TEXT};
+                margin-bottom: 12px;
+            }}
+            .sil-highlight-grid {{
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 12px 18px;
+            }}
+            .sil-highlight-grid .label {{
+                display: block;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: {TEXT_MUTED};
+                margin-bottom: 2px;
+            }}
+            .sil-highlight-grid .value {{
+                display: block;
+                font-size: 1.1rem;
+                font-weight: 600;
+                color: {TEXT};
+            }}
+        </style>
+        <div class="sil-performance">
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("Performance")
     if df is None:
         missing_results_notice()
+        st.markdown("</div>", unsafe_allow_html=True)
         return
     if df.empty:
         st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     render_kpi_cards(df)
     st.divider()
 
-    st.subheader("Solver Metrics by Puzzle")
-    tab1, tab2, tab3 = st.tabs(["Recursive Calls", "Backtracks", "Execution Time"])
+    # ---------------- Precompute report statistics (display-only) ----------------
+    by_diff_calls = df.groupby("difficulty")["recursive_calls"].mean().reindex(DIFFICULTY_ORDER).dropna()
+    if len(by_diff_calls) >= 2:
+        calls_ratio = by_diff_calls.iloc[-1] / max(by_diff_calls.iloc[0], 1e-9)
+    else:
+        calls_ratio = None
 
-    with tab1:
-        fig = px.bar(
-            df, x="id", y="recursive_calls", color="difficulty",
-            category_orders={"difficulty": DIFFICULTY_ORDER},
-            color_discrete_map=DIFFICULTY_COLORS,
-            labels={"id": "Puzzle ID", "recursive_calls": "Recursive Calls"},
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    backtrack_ratio = (df["backtracks"] / df["recursive_calls"].replace(0, np.nan)).mean() * 100
+    corr_time_calls = df["execution_time_ms"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
 
-    with tab2:
-        fig = px.bar(
-            df, x="id", y="backtracks", color="difficulty",
-            category_orders={"difficulty": DIFFICULTY_ORDER},
-            color_discrete_map=DIFFICULTY_COLORS,
-            labels={"id": "Puzzle ID", "backtracks": "Backtracks"},
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-    with tab3:
-        fig = px.bar(
-            df, x="id", y="execution_time_ms", color="difficulty",
-            category_orders={"difficulty": DIFFICULTY_ORDER},
-            color_discrete_map=DIFFICULTY_COLORS,
-            labels={"id": "Puzzle ID", "execution_time_ms": "Execution Time (ms)"},
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    # ---------------- Recursive calls ----------------
+    st.subheader("Recursive Calls Scale With Difficulty")
+    calls_finding = (
+        f"Expert puzzles average {calls_ratio:.1f}x more recursive calls than Easy puzzles."
+        if calls_ratio is not None
+        else "Not enough difficulty tiers in the current selection to compare."
+    )
+    st.markdown(
+        f'<p class="sil-finding-text"><span class="label">Finding</span>{calls_finding}</p>'
+        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
+        "Recursive calls are the primary driver of solver cost and track difficulty "
+        "tier closely, making them a reliable proxy for puzzle hardness.</p>",
+        unsafe_allow_html=True,
+    )
+    fig = px.bar(
+        df, x="id", y="recursive_calls", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        labels={"id": "Puzzle ID", "recursive_calls": "Recursive Calls"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(
+        '<p class="sil-chart-caption">Shows which puzzles demand the most search '
+        "effort and how sharply that effort varies within the dataset.</p>",
+        unsafe_allow_html=True,
+    )
 
     st.divider()
-    st.subheader("Hardest and Easiest Puzzle")
+
+    # ---------------- Backtracks ----------------
+    st.subheader("Backtracking Overhead Across Puzzles")
+    st.markdown(
+        f'<p class="sil-finding-text"><span class="label">Finding</span>'
+        f"Backtracks account for about {backtrack_ratio:.1f}% of recursive calls on average.</p>"
+        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
+        "A meaningful share of the search is spent undoing assignments, indicating "
+        "constraint propagation earlier in the search could reduce wasted work.</p>",
+        unsafe_allow_html=True,
+    )
+    fig = px.bar(
+        df, x="id", y="backtracks", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        labels={"id": "Puzzle ID", "backtracks": "Backtracks"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(
+        '<p class="sil-chart-caption">Highlights puzzles where the solver repeatedly '
+        "backtracks, a signal of a harder or more constrained search space.</p>",
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+    # ---------------- Execution time ----------------
+    st.subheader("Execution Time Tracks Search Volume")
+    corr_text = f"r = {corr_time_calls:.2f}" if not np.isnan(corr_time_calls) else "not available"
+    st.markdown(
+        f'<p class="sil-finding-text"><span class="label">Finding</span>'
+        f"Execution time correlates with recursive calls at {corr_text}.</p>"
+        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
+        "Runtime is well explained by search volume, confirming recursive calls as "
+        "a practical stand-in for wall-clock cost when profiling puzzles.</p>",
+        unsafe_allow_html=True,
+    )
+    fig = px.bar(
+        df, x="id", y="execution_time_ms", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        labels={"id": "Puzzle ID", "execution_time_ms": "Execution Time (ms)"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(
+        '<p class="sil-chart-caption">Confirms whether wall-clock time follows the same '
+        "pattern as recursive calls, or if other overhead is at play.</p>",
+        unsafe_allow_html=True,
+    )
+
+    st.divider()
+
+    # ---------------- Highlighted hardest / easiest puzzles ----------------
+    st.markdown('<div class="sil-section-label">Extremes</div>', unsafe_allow_html=True)
+    hardest = df.loc[df["recursive_calls"].idxmax()]
+    easiest = df.loc[df["recursive_calls"].idxmin()]
+
     hard_col, easy_col = st.columns(2)
-    hardest = df.loc[[df["recursive_calls"].idxmax()]]
-    easiest = df.loc[[df["recursive_calls"].idxmin()]]
     with hard_col:
-        st.markdown("**Hardest Puzzle** (most recursive calls)")
-        st.dataframe(hardest, use_container_width=True)
+        st.markdown(
+            '<div class="sil-highlight">'
+            '<div class="sil-highlight-title">Most Difficult Puzzle</div>'
+            '<div class="sil-highlight-grid">'
+            f'<div><span class="label">Puzzle ID</span><span class="value">{hardest["id"]}</span></div>'
+            f'<div><span class="label">Difficulty</span><span class="value">{hardest["difficulty"]}</span></div>'
+            f'<div><span class="label">Recursive Calls</span><span class="value">{hardest["recursive_calls"]:,}</span></div>'
+            f'<div><span class="label">Execution Time</span><span class="value">{hardest["execution_time_ms"]:.3f} ms</span></div>'
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
     with easy_col:
-        st.markdown("**Easiest Puzzle** (fewest recursive calls)")
-        st.dataframe(easiest, use_container_width=True)
+        st.markdown(
+            '<div class="sil-highlight">'
+            '<div class="sil-highlight-title">Least Difficult Puzzle</div>'
+            '<div class="sil-highlight-grid">'
+            f'<div><span class="label">Puzzle ID</span><span class="value">{easiest["id"]}</span></div>'
+            f'<div><span class="label">Difficulty</span><span class="value">{easiest["difficulty"]}</span></div>'
+            f'<div><span class="label">Recursive Calls</span><span class="value">{easiest["recursive_calls"]:,}</span></div>'
+            f'<div><span class="label">Execution Time</span><span class="value">{easiest["execution_time_ms"]:.3f} ms</span></div>'
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
 
     st.divider()
-    st.subheader("Dataset")
-    st.dataframe(df, use_container_width=True)
     st.download_button(
         "Download filtered dataset as CSV",
         data=df.to_csv(index=False).encode("utf-8"),
         file_name="filtered_sudoku_results.csv",
         mime="text/csv",
     )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_statistics(df):
