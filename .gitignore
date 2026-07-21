@@ -19,6 +19,8 @@ Thumbs.db
 # Python cache
 .pytest_cache/
 .mypy_cache/
+__pycache__/
+*.py[cod]
 
 # Jupyter
 .ipynb_checkpoints/
@@ -29,3 +31,8 @@ Thumbs.db
 # Build artifacts
 dist/
 build/
+
+# Compiled binaries
+*.exe
+*.out
+*.o
