@@ -43,21 +43,6 @@ D-->E[Python Analytics]
 
 E-->F[Interactive Dashboard]
 ```
-## Repository Structure
-
-```text
-Sudoku-Intelligence-Lab/
-
-├── c_engine/
-├── dashboard/
-├── python/
-├── data/
-│   ├── dataset/
-│   └── output/
-├── reports/
-├── images/
-└── README.md
-```
 
 ## Repository Structure
 
@@ -94,3 +79,65 @@ performance.
 
 These metrics are exported to `results.csv` and serve as the foundation for the
 statistical analysis, regression models, and dashboard visualizations.
+
+# Interactive Dashboard
+
+The benchmark results are explored through an interactive Streamlit dashboard
+designed as an algorithm performance laboratory.
+
+### Home
+
+![Dashboard](images/home.png)
+
+Overview of the benchmark, project statistics and system architecture.
+
+---
+
+### Explorer
+
+![Explorer](images/explorer.png)
+
+Inspect individual Sudoku puzzles, compare original and solved boards, and
+review solver metrics for each benchmark.
+
+---
+
+### Performance
+
+![Performance](images/performance.png)
+
+Analyze solver workload distributions, runtime behavior, and difficulty scaling.
+
+---
+
+### Statistics
+
+![Statistics](images/statistics.png)
+
+Explore distributions, correlations and descriptive statistics across recorded
+performance metrics.
+
+---
+
+### Regression
+
+![Regression](images/regression.png)
+
+Evaluate regression models and compare predictor strength using R² and
+correlation analysis.
+
+---
+
+### Prediction
+
+![Prediction](images/prediction.png)
+
+Interactively estimate solver effort using the fitted regression models.
+
+---
+
+### Research
+
+![Research](images/research.png)
+
+Summarizes the major engineering conclusions derived from the benchmark.
