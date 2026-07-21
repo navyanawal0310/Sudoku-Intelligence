@@ -141,3 +141,63 @@ Interactively estimate solver effort using the fitted regression models.
 ![Research](images/research.png)
 
 Summarizes the major engineering conclusions derived from the benchmark.
+
+## Key Findings
+
+### Recursive Calls Are the Strongest Runtime Predictor
+
+Recursive calls explain approximately **97%** of execution time variation,
+making them the most reliable indicator of computational cost.
+
+---
+
+### Empty Cell Count Alone Is Not Enough
+
+Although puzzles with more empty cells generally require larger search spaces,
+empty cell count alone explains only a small portion of recursive search effort.
+
+---
+
+### Difficulty Labels Reflect Computational Cost
+
+Benchmark difficulty tiers produce clearly separated recursive call and runtime
+distributions, validating the generated dataset.
+
+---
+
+### Solver Reliability
+
+The recursive backtracking implementation successfully solved **100%** of the
+1,000 benchmark puzzles.
+
+## Technology Stack
+
+| Layer | Technology |
+|--------|------------|
+| Solver | C |
+| Data Generation | Python |
+| Data Analysis | NumPy, Pandas |
+| Dashboard | Streamlit |
+| Visualization | Plotly |
+| Version Control | Git & GitHub |
+
+## Getting Started
+
+### Clone the repository
+
+```bash
+git clone https://github.com/<username>/Sudoku-Intelligence-Lab.git
+cd Sudoku-Intelligence-Lab
+```
+
+### Install dependencies
+
+```bash
+pip install -r requirements.txt
+```
+
+### Launch the dashboard
+
+```bash
+streamlit run dashboard/app.py
+```
