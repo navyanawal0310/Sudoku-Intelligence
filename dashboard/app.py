@@ -1670,115 +1670,342 @@ def page_prediction(df):
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _finding_card(title, description):
+def page_research(full_df):
+    # Page-scoped typography boost (slight, ~5%) — does not affect other pages.
     st.markdown(
-        f'<div class="sil-card"><h4>{title}</h4><p>{description}</p></div>',
+        f"""
+        <style>
+            .sil-research h1 {{ font-size: 1.68rem; }}
+            .sil-research h2, .sil-research h3 {{ font-size: 1.1rem; }}
+            .sil-research .sil-section-label {{ font-size: 0.76rem; }}
+            .sil-research .stCaption, .sil-research [data-testid="stCaptionContainer"] {{
+                font-size: 0.89rem !important;
+            }}
+            .sil-research p, .sil-research li {{ font-size: 1.02rem; }}
+
+            .sil-finding-card {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-left: 3px solid {ACCENT};
+                border-radius: 8px;
+                padding: 18px 20px;
+                height: 100%;
+            }}
+            .sil-finding-card h4 {{
+                margin: 0 0 10px 0;
+                font-size: 0.98rem;
+                font-weight: 600;
+                color: {TEXT};
+            }}
+            .sil-finding-text {{
+                margin: 4px 0 8px 0;
+                font-size: 0.9rem;
+                line-height: 1.5;
+                color: {TEXT_MUTED};
+            }}
+            .sil-finding-text .label {{
+                color: {TEXT};
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.7rem;
+                letter-spacing: 0.05em;
+                margin-right: 6px;
+            }}
+        </style>
+        <div class="sil-research">
+        """,
         unsafe_allow_html=True,
     )
 
-
-def page_research(full_df):
     st.title("Research")
-    st.caption("Key takeaways from the benchmark dataset.")
+    st.caption("Executive summary of the Sudoku Intelligence Lab benchmark.")
 
     if full_df is None or full_df.empty:
         missing_results_notice()
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     df = full_df
+
+    # ---------------- Precompute statistics used throughout (display-only) ----------------
     corr_empty_calls = df["empty_cells"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
-    corr_checks_time = df["candidate_checks"].corr(df["execution_time_ms"]) if len(df) > 1 else float("nan")
-    solve_rate = df["solved"].mean() * 100
+    corr_calls_time = df["recursive_calls"].corr(df["execution_time_ms"]) if len(df) > 1 else float("nan")
+    backtrack_ratio = (df["backtracks"] / df["recursive_calls"].replace(0, np.nan)).mean() * 100
 
     by_difficulty = df.groupby("difficulty")["execution_time_ms"].mean().reindex(DIFFICULTY_ORDER).dropna()
     if len(by_difficulty) >= 2:
         multiplier = by_difficulty.iloc[-1] / max(by_difficulty.iloc[0], 1e-9)
+        multiplier_text = f"{multiplier:.1f}x"
     else:
-        multiplier = float("nan")
+        multiplier_text = "an unmeasured amount"
 
-    df_ratio = (df["backtracks"] / df["recursive_calls"].replace(0, np.nan)).mean() * 100
+    # ============================================================
+    # 1. Objective
+    # ============================================================
+    st.markdown('<div class="sil-section-label">1. Objective</div>', unsafe_allow_html=True)
+    st.write(
+        "This benchmark measures how a recursive backtracking Sudoku solver written "
+        "in C behaves across puzzles of increasing difficulty. By instrumenting the "
+        "solver to record recursive calls, backtracks, candidate checks, and "
+        "execution time, the project aims to identify which internal metrics best "
+        "explain solver cost, and how reliably puzzle difficulty predicts that cost."
+    )
+
+    st.divider()
+
+    # ============================================================
+    # 2. Methodology
+    # ============================================================
+    st.markdown('<div class="sil-section-label">2. Methodology</div>', unsafe_allow_html=True)
+    _card_grid(
+        [
+            {
+                "title": "Dataset",
+                "desc": "1,000 Sudoku puzzles across four difficulty tiers (250 each), "
+                "generated with a maintained puzzle library.",
+            },
+            {
+                "title": "Solver",
+                "desc": "A recursive backtracking solver written in C that assigns "
+                "candidate values cell by cell until a valid completion is found.",
+            },
+            {
+                "title": "Instrumentation",
+                "desc": "Every solve records recursive calls, backtracks, candidate "
+                "checks, and execution time, exported per puzzle to a results CSV.",
+            },
+            {
+                "title": "Analysis Techniques",
+                "desc": "Descriptive statistics, correlation analysis, and "
+                "single-variable linear regression, computed in Python.",
+            },
+        ]
+    )
+
+    st.divider()
+
+    # ============================================================
+    # 3. Key Findings
+    # ============================================================
+    st.markdown('<div class="sil-section-label">3. Key Findings</div>', unsafe_allow_html=True)
+
+    def finding_card(title, finding, evidence, implication):
+        st.markdown(
+            f'<div class="sil-finding-card"><h4>{title}</h4>'
+            f'<p class="sil-finding-text"><span class="label">Finding</span>{finding}</p>'
+            f'<p class="sil-finding-text"><span class="label">Evidence</span>{evidence}</p>'
+            f'<p class="sil-finding-text"><span class="label">Implication</span>{implication}</p>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
     row1 = st.columns(2)
     with row1[0]:
-        _finding_card(
-            "Search space grows with empty cells",
-            f"Empty cells and recursive calls correlate at r = {corr_empty_calls:.2f}, "
-            "supporting the expected exponential growth of the backtracking search "
-            "space as more cells need to be filled.",
+        finding_card(
+            "Difficulty tiers scale solver cost",
+            "Harder difficulty tiers require substantially more search effort.",
+            f"Average execution time increases roughly {multiplier_text} from the "
+            "easiest to the hardest difficulty tier in the current dataset.",
+            "Difficulty labels are a trustworthy stand-in for expected solver "
+            "cost when planning benchmark runs.",
         )
     with row1[1]:
-        _finding_card(
-            "Difficulty tiers scale execution time",
-            f"Average execution time increases roughly {multiplier:.1f}x from the "
-            "easiest to the hardest difficulty tier in the current dataset, "
-            "confirming the difficulty labels track real solver effort.",
+        recursive_corr_text = f"r = {corr_calls_time:.2f}" if not np.isnan(corr_calls_time) else "not available"
+        finding_card(
+            "Recursive calls predict execution time",
+            "Execution time closely follows the number of recursive calls a "
+            "puzzle requires.",
+            f"Recursive calls and execution time correlate at {recursive_corr_text} "
+            "(see Regression, Study 2).",
+            "Recursive call count can substitute for wall-clock timing as a "
+            "lower-noise cost metric in future benchmarking.",
         )
 
     row2 = st.columns(2)
     with row2[0]:
-        _finding_card(
-            "Candidate checks drive runtime",
-            f"Candidate safety checks and execution time correlate at r = "
-            f"{corr_checks_time:.2f}, indicating constraint checking is a major "
-            "cost driver in the recursive solver.",
+        finding_card(
+            "Backtracking is a meaningful share of work",
+            "The solver spends a non-trivial portion of its search undoing "
+            "assignments.",
+            f"On average, backtracks account for about {backtrack_ratio:.1f}% of "
+            "recursive calls.",
+            "Adding constraint propagation ahead of search could reduce wasted "
+            "work and lower solve times.",
         )
     with row2[1]:
-        _finding_card(
-            "Backtracking is a meaningful share of work",
-            f"On average, backtracks account for about {df_ratio:.1f}% of recursive "
-            "calls, showing the solver regularly needs to undo assignments before "
-            "finding a valid path forward.",
+        empty_corr_text = f"r = {corr_empty_calls:.2f}" if not np.isnan(corr_empty_calls) else "not available"
+        finding_card(
+            "Empty cell count alone is a weak predictor",
+            "The number of empty cells explains little of the variation in "
+            "recursive calls on its own.",
+            f"Empty cells and recursive calls correlate at only {empty_corr_text} "
+            "(see Regression, Study 1).",
+            "Difficulty estimation needs a structural signal beyond cell count, "
+            "such as constraint density, not cell count alone.",
         )
 
-    row3 = st.columns(2)
-    with row3[0]:
-        _finding_card(
-            "Deterministic completeness",
-            f"The backtracking solver reaches a solution in {solve_rate:.1f}% of "
-            "benchmarked puzzles, consistent with backtracking search being "
-            "complete for valid Sudoku puzzles.",
-        )
-    with row3[1]:
-        _finding_card(
-            "Difficulty labels are a useful proxy",
-            "Grouping puzzles by generation difficulty produces clearly separated "
-            "distributions of recursive calls and execution time, making "
-            "difficulty tier a practical predictor of solver effort.",
-        )
+    st.divider()
+
+    # ============================================================
+    # 4. Engineering Conclusions
+    # ============================================================
+    st.markdown('<div class="sil-section-label">4. Engineering Conclusions</div>', unsafe_allow_html=True)
+    st.markdown(
+        "- Recursive call count is the most dependable single metric for "
+        "estimating solver cost, both for comparing puzzles and for predicting "
+        "execution time.\n"
+        "- Empty cell count alone is not a reliable difficulty proxy; puzzles "
+        "with similar cell counts can require very different amounts of search.\n"
+        "- The meaningful share of backtracking suggests that lightweight "
+        "constraint propagation before search could reduce wasted recursive calls.\n"
+        "- Because execution time tracks recursive calls closely, future "
+        "profiling can lean on call counts to reduce noise from system-level "
+        "timing variance."
+    )
+
+    st.divider()
+
+    # ============================================================
+    # 5. Future Work
+    # ============================================================
+    st.markdown('<div class="sil-section-label">5. Future Work</div>', unsafe_allow_html=True)
+    _card_grid(
+        [
+            {
+                "title": "Heuristic Solvers",
+                "desc": "Add cell-ordering heuristics, such as minimum remaining "
+                "values, to reduce backtracking before it happens.",
+            },
+            {
+                "title": "Algorithm X (Dancing Links)",
+                "desc": "Implement Knuth's Algorithm X as an exact-cover alternative "
+                "and compare it against recursive backtracking.",
+            },
+            {
+                "title": "Parallel Solving",
+                "desc": "Explore parallelizing independent search branches to reduce "
+                "wall-clock time on the hardest puzzles.",
+            },
+            {
+                "title": "Broader CSP Benchmarking",
+                "desc": "Extend the benchmark harness to other constraint "
+                "satisfaction problems, such as N-Queens or graph coloring.",
+            },
+        ]
+    )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_about():
+    # Page-scoped typography boost (slight, ~5%) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-about h1 {{ font-size: 1.68rem; }}
+            .sil-about h2, .sil-about h3 {{ font-size: 1.1rem; }}
+            .sil-about .sil-section-label {{ font-size: 0.76rem; }}
+            .sil-about p, .sil-about li {{ font-size: 1.02rem; }}
+            .sil-about div[data-testid="stMetricLabel"] {{ font-size: 0.82rem; }}
+            .sil-about div[data-testid="stMetricValue"] {{ font-size: 1.58rem; }}
+        </style>
+        <div class="sil-about">
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("About")
+
+    # ============================================================
+    # 1. Project Overview
+    # ============================================================
+    st.markdown('<div class="sil-section-label">1. Project Overview</div>', unsafe_allow_html=True)
     st.write(
-        "**Sudoku Intelligence Lab** benchmarks a recursive backtracking Sudoku "
-        "solver written in C, instrumented to record recursive calls, "
-        "backtracks, candidate checks, and execution time for each puzzle."
+        "Sudoku Intelligence Lab benchmarks a recursive backtracking Sudoku solver "
+        "written in C. Every solve is instrumented to record search behavior in "
+        "detail, and the results are analyzed in this dashboard to understand what "
+        "drives solver cost and how reliably it can be predicted."
     )
 
-    st.subheader("Pipeline")
+    st.divider()
+
+    # ============================================================
+    # 2. System Architecture
+    # ============================================================
+    st.markdown('<div class="sil-section-label">2. System Architecture</div>', unsafe_allow_html=True)
     st.markdown(
-        "1. **Dataset generation** — `generate_dataset.py` produces 1,000 unique "
-        "puzzles across four difficulty tiers using a maintained Sudoku "
-        "generation library.\n"
-        "2. **Benchmarking** — the instrumented C solver (`solver.c`, "
-        "`dataset.c`) solves every puzzle and exports per-puzzle metrics to CSV.\n"
-        "3. **Analysis** — this Streamlit dashboard loads the results for "
-        "interactive filtering, visualization, and simple predictive modeling."
+        _pipeline_diagram_svg(
+            ["Dataset", "C Solver", "Performance Metrics", "CSV Results", "Python Analytics", "Dashboard"]
+        ),
+        unsafe_allow_html=True,
     )
 
-    st.subheader("Tech Stack")
+    st.divider()
+
+    # ============================================================
+    # 3. Processing Pipeline
+    # ============================================================
+    st.markdown('<div class="sil-section-label">3. Processing Pipeline</div>', unsafe_allow_html=True)
     st.markdown(
-        "- **C** — recursive backtracking solver with performance instrumentation\n"
-        "- **Python** — dataset generation and analysis tooling\n"
-        "- **Streamlit + Plotly** — interactive dashboard and charts\n"
-        "- **NumPy / pandas** — regression fitting and data wrangling"
+        "1. **Generate** a difficulty-balanced puzzle dataset (250 puzzles per tier).\n"
+        "2. **Solve** every puzzle with the instrumented C backtracking solver.\n"
+        "3. **Export** per-puzzle metrics and timing to a results CSV.\n"
+        "4. **Analyze** the results in this dashboard: filtering, statistics, "
+        "regression, and prediction."
     )
 
-    st.subheader("Data Files")
-    st.markdown(
-        f"- Puzzle dataset: `{PUZZLES_PATH}`\n"
-        f"- Benchmark results: `{RESULTS_PATH}`"
+    st.divider()
+
+    # ============================================================
+    # 4. Technology Stack
+    # ============================================================
+    st.markdown('<div class="sil-section-label">4. Technology Stack</div>', unsafe_allow_html=True)
+    tech_stack = pd.DataFrame(
+        [
+            {"Responsibility": "Solver", "Technology": "C"},
+            {"Responsibility": "Dataset Generation", "Technology": "Python, dokusan"},
+            {"Responsibility": "Analysis", "Technology": "NumPy, pandas"},
+            {"Responsibility": "Dashboard", "Technology": "Streamlit, Plotly"},
+        ]
     )
+    st.dataframe(tech_stack, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # ============================================================
+    # 5. Repository Structure
+    # ============================================================
+    st.markdown('<div class="sil-section-label">5. Repository Structure</div>', unsafe_allow_html=True)
+    st.code(
+        "sudoku-intelligence-lab/\n"
+        "├── solver.c / solver.h      # C solver + performance instrumentation\n"
+        "├── dataset.c                # Benchmark harness, exports results.csv\n"
+        "├── python/\n"
+        "│   └── generate_dataset.py  # Puzzle dataset generation\n"
+        "├── data/\n"
+        "│   ├── dataset/             # Generated puzzle dataset (sudoku_dataset.csv)\n"
+        "│   └── output/              # Benchmark results (results.csv)\n"
+        "└── app.py                   # Streamlit dashboard",
+        language="text",
+    )
+
+    st.divider()
+
+    # ============================================================
+    # 6. Project Statistics
+    # ============================================================
+    st.markdown('<div class="sil-section-label">6. Project Statistics</div>', unsafe_allow_html=True)
+    stat_row1 = st.columns(3)
+    stat_row1[0].metric("Benchmark Puzzles", "1,000")
+    stat_row1[1].metric("Difficulty Tiers", "4")
+    stat_row1[2].metric("Dashboard Pages", "7")
+
+    stat_row2 = st.columns(3)
+    stat_row2[0].metric("Recorded Metrics", "6")
+    stat_row2[1].metric("Regression Studies", "2")
+    stat_row2[2].metric("Solve Rate", "100%")
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 # =========================================================
