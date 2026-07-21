@@ -183,21 +183,62 @@ The recursive backtracking implementation successfully solved **100%** of the
 
 ## Getting Started
 
-### Clone the repository
+### 1. Clone the repository
 
 ```bash
-git clone https://github.com/<username>/Sudoku-Intelligence-Lab.git
+git clone https://github.com/navyanawal0310/Sudoku-Intelligence
 cd Sudoku-Intelligence-Lab
 ```
 
-### Install dependencies
+### 2. Install Python dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### Launch the dashboard
+### 3. Generate the benchmark dataset (if required)
+
+```bash
+python python/generate_dataset.py
+```
+
+### 4. Build and run the C benchmark
+
+```bash
+cd c_engine
+
+gcc main.c solver.c dataset.c -o benchmark
+
+./benchmark
+```
+
+This generates:
+
+- `data/output/results.csv`
+- `data/output/puzzles.csv`
+
+### 5. Launch the dashboard
 
 ```bash
 streamlit run dashboard/app.py
 ```
+## Repository Contents
+
+| Directory | Description |
+|-----------|-------------|
+| `c_engine/` | Instrumented recursive backtracking solver |
+| `dashboard/` | Streamlit application |
+| `python/` | Statistical analysis and regression scripts |
+| `data/dataset/` | Benchmark Sudoku dataset |
+| `data/output/` | Generated benchmark metrics |
+| `images/` | Dashboard screenshots |
+| `reports/` | Generated reports and research outputs |
+
+## Future Work
+
+- Implement heuristic-based solvers (MRV, Forward Checking)
+- Benchmark Algorithm X (Dancing Links)
+- Compare multiple Sudoku solving algorithms
+- Expand the framework into a general CSP benchmarking laboratory
+- Support larger benchmark datasets
+
