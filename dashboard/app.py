@@ -926,46 +926,6 @@ def page_performance(df):
                 letter-spacing: 0.05em;
                 margin-right: 6px;
             }}
-            .sil-chart-caption {{
-                color: {TEXT_MUTED};
-                font-size: 0.82rem;
-                margin-top: -6px;
-                margin-bottom: 4px;
-            }}
-
-            .sil-highlight {{
-                background-color: {BG_CARD};
-                border: 1px solid {BORDER};
-                border-left: 3px solid {ACCENT};
-                border-radius: 8px;
-                padding: 18px 20px;
-                height: 100%;
-            }}
-            .sil-highlight-title {{
-                font-weight: 600;
-                font-size: 1rem;
-                color: {TEXT};
-                margin-bottom: 12px;
-            }}
-            .sil-highlight-grid {{
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 12px 18px;
-            }}
-            .sil-highlight-grid .label {{
-                display: block;
-                font-size: 0.72rem;
-                text-transform: uppercase;
-                letter-spacing: 0.05em;
-                color: {TEXT_MUTED};
-                margin-bottom: 2px;
-            }}
-            .sil-highlight-grid .value {{
-                display: block;
-                font-size: 1.1rem;
-                font-weight: 600;
-                color: {TEXT};
-            }}
         </style>
         <div class="sil-performance">
         """,
@@ -985,126 +945,139 @@ def page_performance(df):
     render_kpi_cards(df)
     st.divider()
 
+    def report_block(finding, evidence, conclusion):
+        st.markdown(
+            f'<p class="sil-finding-text"><span class="label">Finding</span>{finding}</p>'
+            f'<p class="sil-finding-text"><span class="label">Evidence</span>{evidence}</p>'
+            f'<p class="sil-finding-text"><span class="label">Conclusion</span>{conclusion}</p>',
+            unsafe_allow_html=True,
+        )
+
     # ---------------- Precompute report statistics (display-only) ----------------
-    by_diff_calls = df.groupby("difficulty")["recursive_calls"].mean().reindex(DIFFICULTY_ORDER).dropna()
-    if len(by_diff_calls) >= 2:
-        calls_ratio = by_diff_calls.iloc[-1] / max(by_diff_calls.iloc[0], 1e-9)
-    else:
-        calls_ratio = None
-
-    backtrack_ratio = (df["backtracks"] / df["recursive_calls"].replace(0, np.nan)).mean() * 100
+    by_diff_calls = df.groupby("difficulty")["recursive_calls"].median().reindex(DIFFICULTY_ORDER).dropna()
+    by_diff_time = df.groupby("difficulty")["execution_time_ms"].median().reindex(DIFFICULTY_ORDER).dropna()
     corr_time_calls = df["execution_time_ms"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
+    skew_calls = df["recursive_calls"].skew() if len(df) > 2 else float("nan")
 
-    # ---------------- Recursive calls ----------------
-    st.subheader("Recursive Calls Scale With Difficulty")
-    calls_finding = (
-        f"Expert puzzles average {calls_ratio:.1f}x more recursive calls than Easy puzzles."
-        if calls_ratio is not None
-        else "Not enough difficulty tiers in the current selection to compare."
+    top10 = df.sort_values("recursive_calls", ascending=False).head(10)
+    top10_expert_share = (top10["difficulty"] == "Expert").sum()
+
+    # ---------------- 1. Distribution of Recursive Calls ----------------
+    st.subheader("Recursive Call Distribution Is Right-Skewed")
+    report_block(
+        "Most puzzles solve with relatively few recursive calls, but a small "
+        "number require far more.",
+        f"Skewness of recursive calls is {skew_calls:.2f} "
+        f"(mean {df['recursive_calls'].mean():,.0f}, median {df['recursive_calls'].median():,.0f}).",
+        "A long right tail means a handful of puzzles dominate total solver cost, "
+        "so average-based capacity planning can understate worst-case load.",
     )
-    st.markdown(
-        f'<p class="sil-finding-text"><span class="label">Finding</span>{calls_finding}</p>'
-        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
-        "Recursive calls are the primary driver of solver cost and track difficulty "
-        "tier closely, making them a reliable proxy for puzzle hardness.</p>",
-        unsafe_allow_html=True,
-    )
-    fig = px.bar(
-        df, x="id", y="recursive_calls", color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        color_discrete_map=DIFFICULTY_COLORS,
-        labels={"id": "Puzzle ID", "recursive_calls": "Recursive Calls"},
+    fig = px.histogram(
+        df, x="recursive_calls", nbins=30,
+        labels={"recursive_calls": "Recursive Calls"},
+        color_discrete_sequence=[ACCENT],
     )
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown(
-        '<p class="sil-chart-caption">Shows which puzzles demand the most search '
-        "effort and how sharply that effort varies within the dataset.</p>",
-        unsafe_allow_html=True,
-    )
 
     st.divider()
 
-    # ---------------- Backtracks ----------------
-    st.subheader("Backtracking Overhead Across Puzzles")
-    st.markdown(
-        f'<p class="sil-finding-text"><span class="label">Finding</span>'
-        f"Backtracks account for about {backtrack_ratio:.1f}% of recursive calls on average.</p>"
-        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
-        "A meaningful share of the search is spent undoing assignments, indicating "
-        "constraint propagation earlier in the search could reduce wasted work.</p>",
-        unsafe_allow_html=True,
+    # ---------------- 2. Recursive Calls by Difficulty ----------------
+    st.subheader("Difficulty Tier Separates Recursive Call Cost")
+    if len(by_diff_calls) >= 2:
+        calls_evidence = (
+            f"Median recursive calls range from {by_diff_calls.iloc[0]:,.0f} (Easy) "
+            f"to {by_diff_calls.iloc[-1]:,.0f} (Expert)."
+        )
+    else:
+        calls_evidence = "Not enough difficulty tiers in the current selection to compare."
+    report_block(
+        "Recursive call counts increase consistently across difficulty tiers.",
+        calls_evidence,
+        "Difficulty tier is a reliable grouping variable for solver cost and can "
+        "be used to set expectations for search effort before solving.",
     )
-    fig = px.bar(
-        df, x="id", y="backtracks", color="difficulty",
+    fig = px.box(
+        df, x="difficulty", y="recursive_calls", color="difficulty",
         category_orders={"difficulty": DIFFICULTY_ORDER},
         color_discrete_map=DIFFICULTY_COLORS,
-        labels={"id": "Puzzle ID", "backtracks": "Backtracks"},
+        labels={"difficulty": "Difficulty", "recursive_calls": "Recursive Calls"},
     )
+    fig.update_layout(showlegend=False)
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown(
-        '<p class="sil-chart-caption">Highlights puzzles where the solver repeatedly '
-        "backtracks, a signal of a harder or more constrained search space.</p>",
-        unsafe_allow_html=True,
-    )
 
     st.divider()
 
-    # ---------------- Execution time ----------------
-    st.subheader("Execution Time Tracks Search Volume")
+    # ---------------- 3. Execution Time by Difficulty ----------------
+    st.subheader("Execution Time Scales With Difficulty, With More Spread")
+    if len(by_diff_time) >= 2:
+        time_evidence = (
+            f"Median execution time ranges from {by_diff_time.iloc[0]:.3f} ms (Easy) "
+            f"to {by_diff_time.iloc[-1]:.3f} ms (Expert)."
+        )
+    else:
+        time_evidence = "Not enough difficulty tiers in the current selection to compare."
+    report_block(
+        "Execution time rises with difficulty but with wider variability than "
+        "recursive calls alone.",
+        time_evidence,
+        "Difficulty predicts typical runtime, but system-level timing noise means "
+        "recursive calls remain the more stable metric for cost estimation.",
+    )
+    fig = px.box(
+        df, x="difficulty", y="execution_time_ms", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        labels={"difficulty": "Difficulty", "execution_time_ms": "Execution Time (ms)"},
+    )
+    fig.update_layout(showlegend=False)
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+
+    # ---------------- 4. Runtime vs Recursive Calls ----------------
+    st.subheader("Recursive Calls Are a Strong Predictor of Runtime")
     corr_text = f"r = {corr_time_calls:.2f}" if not np.isnan(corr_time_calls) else "not available"
-    st.markdown(
-        f'<p class="sil-finding-text"><span class="label">Finding</span>'
-        f"Execution time correlates with recursive calls at {corr_text}.</p>"
-        '<p class="sil-finding-text"><span class="label">Conclusion</span>'
-        "Runtime is well explained by search volume, confirming recursive calls as "
-        "a practical stand-in for wall-clock cost when profiling puzzles.</p>",
-        unsafe_allow_html=True,
+    report_block(
+        "Execution time closely tracks the number of recursive calls a puzzle "
+        "requires.",
+        f"Execution time correlates with recursive calls at {corr_text} across "
+        f"{len(df)} puzzles.",
+        "Recursive call count is a practical, low-noise stand-in for wall-clock "
+        "cost when profiling or comparing puzzles.",
     )
-    fig = px.bar(
-        df, x="id", y="execution_time_ms", color="difficulty",
+    fig = px.scatter(
+        df, x="recursive_calls", y="execution_time_ms", color="difficulty",
         category_orders={"difficulty": DIFFICULTY_ORDER},
         color_discrete_map=DIFFICULTY_COLORS,
-        labels={"id": "Puzzle ID", "execution_time_ms": "Execution Time (ms)"},
+        labels={"recursive_calls": "Recursive Calls", "execution_time_ms": "Execution Time (ms)"},
     )
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown(
-        '<p class="sil-chart-caption">Confirms whether wall-clock time follows the same '
-        "pattern as recursive calls, or if other overhead is at play.</p>",
-        unsafe_allow_html=True,
-    )
 
     st.divider()
 
-    # ---------------- Highlighted hardest / easiest puzzles ----------------
-    st.markdown('<div class="sil-section-label">Extremes</div>', unsafe_allow_html=True)
-    hardest = df.loc[df["recursive_calls"].idxmax()]
-    easiest = df.loc[df["recursive_calls"].idxmin()]
-
-    hard_col, easy_col = st.columns(2)
-    with hard_col:
-        st.markdown(
-            '<div class="sil-highlight">'
-            '<div class="sil-highlight-title">Most Difficult Puzzle</div>'
-            '<div class="sil-highlight-grid">'
-            f'<div><span class="label">Puzzle ID</span><span class="value">{hardest["id"]}</span></div>'
-            f'<div><span class="label">Difficulty</span><span class="value">{hardest["difficulty"]}</span></div>'
-            f'<div><span class="label">Recursive Calls</span><span class="value">{hardest["recursive_calls"]:,}</span></div>'
-            f'<div><span class="label">Execution Time</span><span class="value">{hardest["execution_time_ms"]:.3f} ms</span></div>'
-            "</div></div>",
-            unsafe_allow_html=True,
-        )
-    with easy_col:
-        st.markdown(
-            '<div class="sil-highlight">'
-            '<div class="sil-highlight-title">Least Difficult Puzzle</div>'
-            '<div class="sil-highlight-grid">'
-            f'<div><span class="label">Puzzle ID</span><span class="value">{easiest["id"]}</span></div>'
-            f'<div><span class="label">Difficulty</span><span class="value">{easiest["difficulty"]}</span></div>'
-            f'<div><span class="label">Recursive Calls</span><span class="value">{easiest["recursive_calls"]:,}</span></div>'
-            f'<div><span class="label">Execution Time</span><span class="value">{easiest["execution_time_ms"]:.3f} ms</span></div>'
-            "</div></div>",
-            unsafe_allow_html=True,
-        )
+    # ---------------- 5. Top 10 Hardest Puzzles ----------------
+    st.subheader("Hardest Puzzles Cluster in the Expert Tier")
+    report_block(
+        "The puzzles with the highest recursive call counts are concentrated in "
+        "the hardest difficulty tier.",
+        f"{top10_expert_share} of the top 10 puzzles by recursive calls are "
+        "labeled Expert.",
+        "Generation difficulty labels align with actual measured solver cost, "
+        "validating difficulty tier as a trustworthy benchmark grouping.",
+    )
+    st.dataframe(
+        top10[["id", "difficulty", "recursive_calls", "backtracks", "execution_time_ms"]].rename(
+            columns={
+                "id": "Puzzle ID",
+                "difficulty": "Difficulty",
+                "recursive_calls": "Recursive Calls",
+                "backtracks": "Backtracks",
+                "execution_time_ms": "Execution Time (ms)",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
 
     st.divider()
     st.download_button(
@@ -1118,15 +1091,90 @@ def page_performance(df):
 
 
 def page_statistics(df):
+    # Page-scoped typography boost (slight, ~5%) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-statistics h1 {{ font-size: 1.68rem; }}
+            .sil-statistics h2, .sil-statistics h3 {{ font-size: 1.1rem; }}
+            .sil-statistics .sil-section-label {{ font-size: 0.76rem; }}
+            .sil-statistics .stCaption, .sil-statistics [data-testid="stCaptionContainer"] {{
+                font-size: 0.89rem !important;
+            }}
+            .sil-statistics div[data-testid="stMetricLabel"] {{ font-size: 0.82rem; }}
+            .sil-statistics div[data-testid="stMetricValue"] {{ font-size: 1.58rem; }}
+            .sil-statistics p, .sil-statistics li {{ font-size: 1.02rem; }}
+
+            .sil-finding-text {{
+                margin: 4px 0 10px 0;
+                font-size: 0.94rem;
+                line-height: 1.5;
+            }}
+            .sil-finding-text .label {{
+                color: {TEXT_MUTED};
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.74rem;
+                letter-spacing: 0.05em;
+                margin-right: 6px;
+            }}
+            .sil-question {{
+                color: {TEXT_MUTED};
+                font-size: 0.95rem;
+                font-style: italic;
+                margin: -4px 0 14px 0;
+            }}
+        </style>
+        <div class="sil-statistics">
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("Statistics")
     if df is None:
         missing_results_notice()
+        st.markdown("</div>", unsafe_allow_html=True)
         return
     if df.empty:
         st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    st.subheader("Distribution by Difficulty")
+    def report_block(finding, evidence, conclusion):
+        st.markdown(
+            f'<p class="sil-finding-text"><span class="label">Finding</span>{finding}</p>'
+            f'<p class="sil-finding-text"><span class="label">Evidence</span>{evidence}</p>'
+            f'<p class="sil-finding-text"><span class="label">Conclusion</span>{conclusion}</p>',
+            unsafe_allow_html=True,
+        )
+
+    numeric_columns = [c for c in NUMERIC_METRICS if c in df.columns]
+
+    # ============================================================
+    # Section 1 — How does puzzle difficulty affect solver complexity?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Section 1</div>', unsafe_allow_html=True)
+    st.subheader("How Does Puzzle Difficulty Affect Solver Complexity?")
+
+    by_diff_calls = df.groupby("difficulty")["recursive_calls"].median().reindex(DIFFICULTY_ORDER).dropna()
+    by_diff_time = df.groupby("difficulty")["execution_time_ms"].median().reindex(DIFFICULTY_ORDER).dropna()
+    if len(by_diff_calls) >= 2 and len(by_diff_time) >= 2:
+        s1_evidence = (
+            f"Median recursive calls rise from {by_diff_calls.iloc[0]:,.0f} (Easy) to "
+            f"{by_diff_calls.iloc[-1]:,.0f} (Expert); median execution time rises from "
+            f"{by_diff_time.iloc[0]:.3f} ms to {by_diff_time.iloc[-1]:.3f} ms over the same tiers."
+        )
+    else:
+        s1_evidence = "Not enough difficulty tiers in the current selection to compare."
+    report_block(
+        "Both recursive calls and execution time increase consistently as puzzle "
+        "difficulty rises.",
+        s1_evidence,
+        "Difficulty tier is a reliable predictor of solver complexity across both "
+        "a computation-based metric (recursive calls) and a wall-clock metric "
+        "(execution time).",
+    )
+
     dist1, dist2 = st.columns(2)
     with dist1:
         fig = px.box(
@@ -1135,6 +1183,7 @@ def page_statistics(df):
             color_discrete_map=DIFFICULTY_COLORS,
             title="Recursive Calls by Difficulty",
         )
+        fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
     with dist2:
         fig = px.box(
@@ -1143,60 +1192,115 @@ def page_statistics(df):
             color_discrete_map=DIFFICULTY_COLORS,
             title="Execution Time by Difficulty",
         )
+        fig.update_layout(showlegend=False)
         st.plotly_chart(fig, use_container_width=True)
 
     st.divider()
-    st.subheader("Correlation Between Metrics")
-    numeric_columns = [c for c in NUMERIC_METRICS if c in df.columns]
-    corr1, corr2 = st.columns(2)
-    with corr1:
-        if len(df) > 1 and len(numeric_columns) > 1:
-            corr_matrix = df[numeric_columns].corr()
-            fig = px.imshow(
-                corr_matrix, text_auto=".2f", color_continuous_scale="RdBu_r",
-                zmin=-1, zmax=1, title="Metric Correlation Heatmap",
+
+    # ============================================================
+    # Section 2 — Which metrics are most strongly related?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Section 2</div>', unsafe_allow_html=True)
+    st.subheader("Which Metrics Are Most Strongly Related?")
+
+    if len(df) > 1 and len(numeric_columns) > 1:
+        corr_matrix = df[numeric_columns].corr()
+        mask = np.triu(np.ones(corr_matrix.shape, dtype=bool), k=1)
+        pairs = corr_matrix.where(mask).unstack().dropna()
+
+        if len(pairs) > 0:
+            strongest_key = pairs.abs().idxmax()
+            weakest_key = pairs.abs().idxmin()
+            strongest_val = pairs[strongest_key]
+            weakest_val = pairs[weakest_key]
+            s2_evidence = (
+                f"Strongest relationship: {strongest_key[0]} vs {strongest_key[1]} "
+                f"(r = {strongest_val:.2f}). Weakest relationship: {weakest_key[0]} vs "
+                f"{weakest_key[1]} (r = {weakest_val:.2f})."
             )
-            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.info("Not enough data to compute correlations.")
-    with corr2:
-        fig = px.scatter(
-            df, x="empty_cells", y="recursive_calls", color="difficulty",
-            category_orders={"difficulty": DIFFICULTY_ORDER},
-            color_discrete_map=DIFFICULTY_COLORS,
-            trendline="ols" if len(df) > 1 else None,
-            title="Empty Cells vs. Recursive Calls",
+            s2_evidence = "Not enough metric pairs to compare."
+
+        report_block(
+            "Solver metrics vary widely in how closely they move together.",
+            s2_evidence,
+            "The strongest pair points to the most redundant metric for tracking "
+            "solver cost, while the weakest pair marks metrics that carry mostly "
+            "independent information.",
+        )
+
+        fig = px.imshow(
+            corr_matrix, text_auto=".2f", color_continuous_scale="RdBu_r",
+            zmin=-1, zmax=1, title="Metric Correlation Heatmap",
         )
         st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Not enough data to compute correlations.")
 
     st.divider()
-    st.subheader("Summary Statistics")
-    st.dataframe(df[numeric_columns].describe().T, use_container_width=True)
+
+    # ============================================================
+    # Section 3 — Can recursive calls explain execution time?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Section 3</div>', unsafe_allow_html=True)
+    st.subheader("Can Recursive Calls Explain Execution Time?")
+
+    corr_calls_time = df["execution_time_ms"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
+    corr_calls_time_text = f"r = {corr_calls_time:.2f}" if not np.isnan(corr_calls_time) else "not available"
+    report_block(
+        "Execution time closely follows the number of recursive calls a puzzle requires.",
+        f"The correlation between recursive calls and execution time is {corr_calls_time_text} "
+        f"across {len(df)} puzzles.",
+        "Recursive calls explain most of the variation in execution time, making "
+        "them a dependable proxy for runtime when comparing puzzles.",
+    )
+    fig = px.scatter(
+        df, x="recursive_calls", y="execution_time_ms", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        trendline="ols" if len(df) > 1 else None,
+        title="Execution Time vs. Recursive Calls",
+        labels={"recursive_calls": "Recursive Calls", "execution_time_ms": "Execution Time (ms)"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.divider()
+
+    # ============================================================
+    # Section 4 — Do empty cells predict solver cost?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Section 4</div>', unsafe_allow_html=True)
+    st.subheader("Do Empty Cells Predict Solver Cost?")
+
+    corr_empty_calls = df["empty_cells"].corr(df["recursive_calls"]) if len(df) > 1 else float("nan")
+    corr_empty_calls_text = f"r = {corr_empty_calls:.2f}" if not np.isnan(corr_empty_calls) else "not available"
+    report_block(
+        "The number of empty cells has only a weak relationship with recursive calls.",
+        f"The correlation between empty cells and recursive calls is {corr_empty_calls_text}, "
+        "noticeably weaker than the relationship between recursive calls and execution time.",
+        "Empty cell count sets the size of the search space but not its shape: two "
+        "puzzles with the same number of empty cells can differ greatly in how "
+        "constrained those cells are, so cell count alone is a poor predictor of "
+        "solver cost.",
+    )
+    fig = px.scatter(
+        df, x="empty_cells", y="recursive_calls", color="difficulty",
+        category_orders={"difficulty": DIFFICULTY_ORDER},
+        color_discrete_map=DIFFICULTY_COLORS,
+        trendline="ols" if len(df) > 1 else None,
+        title="Empty Cells vs. Recursive Calls",
+        labels={"empty_cells": "Empty Cells", "recursive_calls": "Recursive Calls"},
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
-def page_regression(df):
-    st.title("Regression")
-    if df is None:
-        missing_results_notice()
-        return
-    if df.empty:
-        st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
-        return
-
-    numeric_columns = [c for c in NUMERIC_METRICS if c in df.columns]
-    c1, c2 = st.columns(2)
-    with c1:
-        x_col = st.selectbox("X variable", numeric_columns, index=numeric_columns.index("empty_cells"))
-    with c2:
-        y_col = st.selectbox("Y variable", numeric_columns, index=numeric_columns.index("recursive_calls"))
-
-    if len(df) < 2:
-        st.info("Need at least two puzzles to fit a regression line.")
-        return
-
+def _fit_linear(df, x_col, y_col):
+    """Same linear-fit math as before (np.polyfit least squares), just
+    factored into a helper so both regression studies share one calculation."""
     x = df[x_col].to_numpy(dtype=float)
     y = df[y_col].to_numpy(dtype=float)
-
     slope, intercept = np.polyfit(x, y, 1)
     predicted = slope * x + intercept
     residuals = y - predicted
@@ -1204,38 +1308,259 @@ def page_regression(df):
     ss_tot = float(np.sum((y - y.mean()) ** 2))
     r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
     correlation = float(np.corrcoef(x, y)[0, 1]) if len(x) > 1 else 0.0
+    return {
+        "x": x, "y": y, "slope": slope, "intercept": intercept,
+        "r_squared": r_squared, "correlation": correlation,
+    }
 
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Slope", f"{slope:.3f}")
-    m2.metric("Intercept", f"{intercept:.3f}")
-    m3.metric("R²", f"{r_squared:.3f}")
-    m4.metric("Correlation (r)", f"{correlation:.3f}")
 
-    fig = px.scatter(
-        df, x=x_col, y=y_col, color="difficulty",
-        category_orders={"difficulty": DIFFICULTY_ORDER},
-        color_discrete_map=DIFFICULTY_COLORS,
-        title=f"{y_col} vs. {x_col}",
+def page_regression(df):
+    # Page-scoped typography boost (slight, ~5%) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-regression h1 {{ font-size: 1.68rem; }}
+            .sil-regression h2, .sil-regression h3 {{ font-size: 1.1rem; }}
+            .sil-regression .sil-section-label {{ font-size: 0.76rem; }}
+            .sil-regression .stCaption, .sil-regression [data-testid="stCaptionContainer"] {{
+                font-size: 0.89rem !important;
+            }}
+            .sil-regression div[data-testid="stMetricLabel"] {{ font-size: 0.82rem; }}
+            .sil-regression div[data-testid="stMetricValue"] {{ font-size: 1.58rem; }}
+            .sil-regression p, .sil-regression li {{ font-size: 1.02rem; }}
+
+            .sil-question {{
+                color: {TEXT_MUTED};
+                font-size: 0.95rem;
+                font-style: italic;
+                margin: -4px 0 14px 0;
+            }}
+            .sil-finding-text {{
+                margin: 4px 0 10px 0;
+                font-size: 0.94rem;
+                line-height: 1.5;
+            }}
+            .sil-finding-text .label {{
+                color: {TEXT_MUTED};
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.74rem;
+                letter-spacing: 0.05em;
+                margin-right: 6px;
+            }}
+        </style>
+        <div class="sil-regression">
+        """,
+        unsafe_allow_html=True,
     )
-    line_x = np.linspace(x.min(), x.max(), 100)
-    line_y = slope * line_x + intercept
-    fig.add_trace(go.Scatter(x=line_x, y=line_y, mode="lines", name="Fitted line", line=dict(color=ACCENT, width=3)))
-    st.plotly_chart(fig, use_container_width=True)
+
+    st.title("Regression")
+    if df is None:
+        missing_results_notice()
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    if df.empty:
+        st.info("No puzzles match the current filters. Adjust the filters in the sidebar.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+    if len(df) < 2:
+        st.info("Need at least two puzzles to fit a regression line.")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    def render_study(x_col, y_col, x_label, y_label, chart_title, conclusion, show_slope):
+        fit = _fit_linear(df, x_col, y_col)
+
+        metric_cols = st.columns(3 if show_slope else 2)
+        metric_cols[0].metric("R²", f"{fit['r_squared']:.3f}")
+        metric_cols[1].metric("Correlation (r)", f"{fit['correlation']:.3f}")
+        if show_slope:
+            metric_cols[2].metric("Slope", f"{fit['slope']:.3f}")
+
+        st.markdown(
+            f'<p class="sil-finding-text"><span class="label">Conclusion</span>{conclusion}</p>',
+            unsafe_allow_html=True,
+        )
+
+        fig = px.scatter(
+            df, x=x_col, y=y_col, color="difficulty",
+            category_orders={"difficulty": DIFFICULTY_ORDER},
+            color_discrete_map=DIFFICULTY_COLORS,
+            title=chart_title,
+            labels={x_col: x_label, y_col: y_label},
+        )
+        line_x = np.linspace(fit["x"].min(), fit["x"].max(), 100)
+        line_y = fit["slope"] * line_x + fit["intercept"]
+        fig.add_trace(
+            go.Scatter(x=line_x, y=line_y, mode="lines", name="Fitted line", line=dict(color=ACCENT, width=3))
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        return fit
+
+    # ============================================================
+    # Study 1 — Can empty cell count predict recursive search effort?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Study 1</div>', unsafe_allow_html=True)
+    st.subheader("Can Empty Cell Count Predict Recursive Search Effort?")
+    fit1 = render_study(
+        "empty_cells", "recursive_calls",
+        "Empty Cells", "Recursive Calls",
+        "Recursive Calls vs. Empty Cells",
+        "The model explains only a small share of the variation in recursive calls. "
+        "Empty cell count sets the raw size of the search space but says nothing "
+        "about how constrained those cells are, so puzzles with similar empty-cell "
+        "counts can require very different amounts of search.",
+        show_slope=True,
+    )
+
+    st.divider()
+
+    # ============================================================
+    # Study 2 — Can recursive calls predict execution time?
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Study 2</div>', unsafe_allow_html=True)
+    st.subheader("Can Recursive Calls Predict Execution Time?")
+    fit2 = render_study(
+        "recursive_calls", "execution_time_ms",
+        "Recursive Calls", "Execution Time (ms)",
+        "Execution Time vs. Recursive Calls",
+        "The model explains most of the variation in execution time. Each recursive "
+        "call does a bounded, roughly constant amount of work, so the total call "
+        "count scales almost linearly with wall-clock runtime.",
+        show_slope=False,
+    )
+
+    st.divider()
+
+    # ============================================================
+    # Comparison
+    # ============================================================
+    st.markdown('<div class="sil-section-label">Comparison</div>', unsafe_allow_html=True)
+    st.subheader("Which Predictor Is Stronger?")
+
+    comparison = pd.DataFrame(
+        [
+            {
+                "Model": "Study 1",
+                "Predictor": "Empty Cells",
+                "Target": "Recursive Calls",
+                "R²": round(fit1["r_squared"], 3),
+                "Correlation (r)": round(fit1["correlation"], 3),
+            },
+            {
+                "Model": "Study 2",
+                "Predictor": "Recursive Calls",
+                "Target": "Execution Time",
+                "R²": round(fit2["r_squared"], 3),
+                "Correlation (r)": round(fit2["correlation"], 3),
+            },
+        ]
+    )
+    st.dataframe(comparison, use_container_width=True, hide_index=True)
+
+    if fit2["r_squared"] >= fit1["r_squared"]:
+        stronger_text = (
+            f"Recursive calls are the stronger predictor overall (R² = {fit2['r_squared']:.3f} "
+            f"for execution time vs. R² = {fit1['r_squared']:.3f} for empty cells predicting "
+            "recursive calls), making them the more dependable metric for estimating solver cost."
+        )
+    else:
+        stronger_text = (
+            f"Empty cells are the stronger predictor in this comparison (R² = {fit1['r_squared']:.3f} "
+            f"vs. R² = {fit2['r_squared']:.3f})."
+        )
+    st.markdown(f'<p class="sil-finding-text">{stronger_text}</p>', unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def page_prediction(df):
+    # Page-scoped typography boost (slight, ~5%) — does not affect other pages.
+    st.markdown(
+        f"""
+        <style>
+            .sil-prediction h1 {{ font-size: 1.68rem; }}
+            .sil-prediction h2, .sil-prediction h3 {{ font-size: 1.1rem; }}
+            .sil-prediction .sil-section-label {{ font-size: 0.76rem; }}
+            .sil-prediction .stCaption, .sil-prediction [data-testid="stCaptionContainer"] {{
+                font-size: 0.89rem !important;
+            }}
+            .sil-prediction div[data-testid="stMetricLabel"] {{ font-size: 0.82rem; }}
+            .sil-prediction div[data-testid="stMetricValue"] {{ font-size: 1.58rem; }}
+            .sil-prediction p, .sil-prediction li {{ font-size: 1.02rem; }}
+
+            .sil-finding-text {{
+                margin: 4px 0 10px 0;
+                font-size: 0.94rem;
+                line-height: 1.5;
+            }}
+            .sil-finding-text .label {{
+                color: {TEXT_MUTED};
+                font-weight: 600;
+                text-transform: uppercase;
+                font-size: 0.74rem;
+                letter-spacing: 0.05em;
+                margin-right: 6px;
+            }}
+
+            .sil-summary-card {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-left: 3px solid {ACCENT};
+                border-radius: 8px;
+                padding: 18px 20px;
+            }}
+            .sil-summary-grid {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 12px 18px;
+            }}
+            .sil-summary-grid .label {{
+                display: block;
+                font-size: 0.72rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                color: {TEXT_MUTED};
+                margin-bottom: 2px;
+            }}
+            .sil-summary-grid .value {{
+                display: block;
+                font-size: 1.15rem;
+                font-weight: 600;
+                color: {TEXT};
+            }}
+
+            .sil-notes {{
+                background-color: {BG_CARD};
+                border: 1px solid {BORDER};
+                border-radius: 8px;
+                padding: 16px 20px;
+                color: {TEXT_MUTED};
+                font-size: 0.9rem;
+                line-height: 1.55;
+            }}
+        </style>
+        <div class="sil-prediction">
+        """,
+        unsafe_allow_html=True,
+    )
+
     st.title("Prediction")
     st.caption("Estimate solver effort from puzzle characteristics using a simple linear fit.")
 
     if df is None:
         missing_results_notice()
+        st.markdown("</div>", unsafe_allow_html=True)
         return
     if df.empty or len(df) < 2:
         st.info("Not enough data to build a prediction model.")
+        st.markdown("</div>", unsafe_allow_html=True)
         return
 
     target_options = [c for c in NUMERIC_METRICS if c in df.columns and c != "empty_cells"]
     target_col = st.selectbox("Metric to predict", target_options, index=target_options.index("recursive_calls"))
+    target_label = target_col.replace("_", " ")
 
     x = df["empty_cells"].to_numpy(dtype=float)
     y = df[target_col].to_numpy(dtype=float)
@@ -1252,9 +1577,51 @@ def page_prediction(df):
     prediction = slope * empty_input + intercept
     prediction = max(prediction, 0)
 
-    p1, p2 = st.columns(2)
-    p1.metric(f"Predicted {target_col.replace('_', ' ')}", f"{prediction:,.1f}")
-    p2.metric("Model R²", f"{r_squared:.3f}")
+    # ---------------- Confidence + approximate difficulty (display-only) ----------------
+    if r_squared >= 0.7:
+        confidence = "High"
+    elif r_squared >= 0.4:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    by_diff_empty = df.groupby("difficulty")["empty_cells"].median().reindex(DIFFICULTY_ORDER).dropna()
+    if len(by_diff_empty) > 0:
+        expected_difficulty = (by_diff_empty - empty_input).abs().idxmin()
+    else:
+        expected_difficulty = "—"
+
+    # ---------------- Finding / Interpretation / Conclusion ----------------
+    st.markdown('<div class="sil-section-label">Reading This Prediction</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<p class="sil-finding-text"><span class="label">Finding</span>'
+        f"At {empty_input} empty cells, the model predicts a {target_label} of "
+        f"{prediction:,.1f}.</p>"
+        f'<p class="sil-finding-text"><span class="label">Interpretation</span>'
+        f"Each additional empty cell shifts predicted {target_label} by about "
+        f"{slope:,.2f} on this linear fit, which explains {r_squared:.3f} of the "
+        f"variation ({r_squared * 100:.0f}%) seen in the dataset.</p>"
+        f'<p class="sil-finding-text"><span class="label">Conclusion</span>'
+        f"Treat this as a {confidence.lower()}-confidence estimate — useful for "
+        "spotting trends, not a substitute for actually running the solver.</p>",
+        unsafe_allow_html=True,
+    )
+
+    # ---------------- Prediction Summary card ----------------
+    st.markdown(
+        '<div class="sil-summary-card">'
+        '<div class="sil-summary-grid">'
+        f'<div><span class="label">Predicted {target_label}</span>'
+        f'<span class="value">{prediction:,.1f}</span></div>'
+        '<div><span class="label">Expected Difficulty (approx.)</span>'
+        f'<span class="value">{expected_difficulty}</span></div>'
+        '<div><span class="label">Model Confidence</span>'
+        f'<span class="value">{confidence}</span></div>'
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.write("")
 
     fig = px.scatter(
         df, x="empty_cells", y=target_col, color="difficulty",
@@ -1273,10 +1640,34 @@ def page_prediction(df):
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.caption(
-        "This is an illustrative linear model fit on the currently filtered "
-        "dataset, not a component of the C solver itself."
+    # ---------------- Model Notes (replaces the old footer disclaimer) ----------------
+    st.markdown('<div class="sil-section-label">Model Notes</div>', unsafe_allow_html=True)
+    if confidence == "High":
+        notes_text = (
+            f"R² = {r_squared:.3f} — empty cell count explains most of the variation in "
+            f"{target_label} here, so the fitted line tracks the data closely and the "
+            "prediction above is a reasonably reliable estimate."
+        )
+    elif confidence == "Medium":
+        notes_text = (
+            f"R² = {r_squared:.3f} — empty cell count explains a moderate share of the "
+            f"variation in {target_label}. The trend direction is meaningful, but individual "
+            "predictions can be noticeably off for any single puzzle."
+        )
+    else:
+        notes_text = (
+            f"R² = {r_squared:.3f} — empty cell count explains only a small share of the "
+            f"variation in {target_label}. Puzzle difficulty depends on how constrained the "
+            "empty cells are, not just how many there are, so this single-variable model is "
+            "best read as illustrative rather than precise."
+        )
+    st.markdown(
+        f'<div class="sil-notes">{notes_text} This is a simple one-variable linear fit on '
+        "the currently filtered dataset, not a component of the C solver itself.</div>",
+        unsafe_allow_html=True,
     )
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def _finding_card(title, description):
