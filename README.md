@@ -4,7 +4,7 @@ An algorithm performance laboratory for analyzing an instrumented recursive back
 
 Built with C, Python, Streamlit and Plotly.
 
-![Dashboard](images/home.png)
+![Dashboard](images/dashboard/home.png)
 ## Overview
 
 Sudoku Intelligence Lab is an engineering project that benchmarks a recursive
@@ -87,7 +87,7 @@ designed as an algorithm performance laboratory.
 
 ### Home
 
-![Dashboard](images/home.png)
+![Dashboard](images/dashboard/home.png)
 
 Overview of the benchmark, project statistics and system architecture.
 
@@ -95,7 +95,7 @@ Overview of the benchmark, project statistics and system architecture.
 
 ### Explorer
 
-![Explorer](images/explorer.png)
+![Explorer](images/dashboard/explorer.png)
 
 Inspect individual Sudoku puzzles, compare original and solved boards, and
 review solver metrics for each benchmark.
@@ -104,7 +104,7 @@ review solver metrics for each benchmark.
 
 ### Performance
 
-![Performance](images/performance.png)
+![Performance](images/dashboard/performance.png)
 
 Analyze solver workload distributions, runtime behavior, and difficulty scaling.
 
@@ -112,7 +112,7 @@ Analyze solver workload distributions, runtime behavior, and difficulty scaling.
 
 ### Statistics
 
-![Statistics](images/statistics.png)
+![Statistics](images/dashboard/statistics.png)
 
 Explore distributions, correlations and descriptive statistics across recorded
 performance metrics.
@@ -121,7 +121,7 @@ performance metrics.
 
 ### Regression
 
-![Regression](images/regression.png)
+![Regression](images/dashboard/regression.png)
 
 Evaluate regression models and compare predictor strength using R² and
 correlation analysis.
@@ -130,7 +130,7 @@ correlation analysis.
 
 ### Prediction
 
-![Prediction](images/prediction.png)
+![Prediction](images/dashboard/prediction.png)
 
 Interactively estimate solver effort using the fitted regression models.
 
@@ -138,7 +138,7 @@ Interactively estimate solver effort using the fitted regression models.
 
 ### Research
 
-![Research](images/research.png)
+![Research](images/dashboard/research.png)
 
 Summarizes the major engineering conclusions derived from the benchmark.
 
@@ -186,7 +186,7 @@ The recursive backtracking implementation successfully solved **100%** of the
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/navyanawal0310/Sudoku-Intelligence
+git clone https://github.com/navyanawal0310/Sudoku-Intelligencegit 
 cd Sudoku-Intelligence-Lab
 ```
 
