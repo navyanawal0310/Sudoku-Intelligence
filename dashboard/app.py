@@ -16,6 +16,8 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # =========================================================
 # Theme
@@ -38,8 +40,8 @@ DIFFICULTY_COLORS = {
     "Expert": "#E85D5D",
 }
 
-RESULTS_PATH = "data/output/results.csv"
-PUZZLES_PATH = "data/dataset/sudoku_dataset.csv"
+RESULTS_PATH = BASE_DIR / "data" / "output" / "results.csv"
+PUZZLES_PATH = BASE_DIR / "data" / "dataset" / "sudoku_dataset.csv"
 
 REQUIRED_RESULT_COLUMNS = [
     "id",
