@@ -4,6 +4,10 @@ An algorithm performance laboratory for analyzing an instrumented recursive back
 
 Built with C, Python, Streamlit and Plotly.
 
+## Live Demo
+
+https://sudoku-intelligence-apzy7b5bfmfudwzt8j2een.streamlit.app
+
 ![Dashboard](images/dashboard/home.png)
 ## Overview
 
