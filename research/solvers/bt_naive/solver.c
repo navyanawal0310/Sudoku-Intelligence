@@ -8,7 +8,7 @@ void reset_metrics(SolverMetrics *metrics)
 }
 
 
-int is_valid_grid(const int grid[SIZE][SIZE])
+int is_valid_grid(int grid[SIZE][SIZE])
 {
     /* Rows */
     for (int row = 0; row < SIZE; row++) {
@@ -72,7 +72,7 @@ int is_valid_grid(const int grid[SIZE][SIZE])
 
 
 static int find_empty_cell(
-    const int grid[SIZE][SIZE],
+    int grid[SIZE][SIZE],
     int *row,
     int *col
 )
@@ -99,7 +99,7 @@ static int find_empty_cell(
 
 
 int is_safe(
-    const int grid[SIZE][SIZE],
+    int grid[SIZE][SIZE],
     int row,
     int col,
     int num,
@@ -208,14 +208,14 @@ int solve_sudoku(
 {
     reset_metrics(metrics);
 
-    if (!is_valid_grid((const int (*)[SIZE])grid))
+    if (!is_valid_grid((int (*)[SIZE])grid))
         return 0;
 
     return solve_recursive(grid, metrics, 0);
 }
 
 
-int is_valid_solution(const int grid[SIZE][SIZE])
+int is_valid_solution(int grid[SIZE][SIZE])
 {
     /* A completed solution cannot contain zeros */
     for (int row = 0; row < SIZE; row++) {

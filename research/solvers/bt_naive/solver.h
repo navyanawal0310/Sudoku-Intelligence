@@ -20,20 +20,26 @@ typedef struct {
     int solution_depth;
 } SolverMetrics;
 
+
 /* Reset all instrumentation counters */
 void reset_metrics(SolverMetrics *metrics);
 
+
 /* Check whether the initial Sudoku grid is valid */
-int is_valid_grid(const int grid[SIZE][SIZE]);
+int is_valid_grid(
+    int grid[SIZE][SIZE]
+);
+
 
 /* Check whether a candidate can legally be placed */
 int is_safe(
-    const int grid[SIZE][SIZE],
+    int grid[SIZE][SIZE],
     int row,
     int col,
     int num,
     SolverMetrics *metrics
 );
+
 
 /* Solve puzzle using deterministic row-major backtracking */
 int solve_sudoku(
@@ -41,7 +47,10 @@ int solve_sudoku(
     SolverMetrics *metrics
 );
 
+
 /* Verify that a completed grid is a valid Sudoku solution */
-int is_valid_solution(const int grid[SIZE][SIZE]);
+int is_valid_solution(
+    int grid[SIZE][SIZE]
+);
 
 #endif
