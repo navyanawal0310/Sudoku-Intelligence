@@ -225,3 +225,6 @@ streamlit run dashboard/app.py
 - Compare multiple Sudoku-solving algorithms
 - Expand the framework into a general CSP benchmarking laboratory
 - Support larger benchmark datasets
+
+## Project Notes
+This repository contains experiments and benchmarks related to Sudoku solving.
