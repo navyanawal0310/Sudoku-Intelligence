@@ -258,6 +258,89 @@ void test_determinism(void)
     printf("PASS: deterministic metrics across 100 runs\n");
 }
 
+void test_hard_puzzle(void)
+{
+    /*
+     * A sparse puzzle used to stress the deterministic
+     * row-major backtracking search.
+     */
+    int grid[SIZE][SIZE] = {
+        {8,0,0,0,0,0,0,0,0},
+        {0,0,3,6,0,0,0,0,0},
+        {0,7,0,0,9,0,2,0,0},
+        {0,5,0,0,0,7,0,0,0},
+        {0,0,0,0,4,5,7,0,0},
+        {0,0,0,1,0,0,0,3,0},
+        {0,0,1,0,0,0,0,6,8},
+        {0,0,8,5,0,0,0,1,0},
+        {0,9,0,0,0,0,4,0,0}
+    };
+
+    SolverMetrics metrics;
+
+    int solved = solve_sudoku(grid, &metrics);
+
+    assert(solved == 1);
+    assert(is_valid_solution(grid) == 1);
+
+    /*
+     * This puzzle contains 60 empty cells.
+     */
+    assert(metrics.solution_depth == 60);
+    assert(metrics.max_depth >= metrics.solution_depth);
+
+    /*
+     * General instrumentation invariants.
+     */
+    assert(metrics.search_nodes ==
+           metrics.recursive_calls);
+
+    assert(metrics.recursive_calls ==
+           metrics.committed_assignments + 1);
+
+    assert(metrics.candidate_checks ==
+           metrics.constraint_rejections +
+           metrics.committed_assignments);
+
+    assert(metrics.committed_assignments -
+           metrics.backtracked_assignments ==
+           (uint64_t)metrics.solution_depth);
+
+    /*
+     * This stress puzzle must actually trigger backtracking.
+     */
+    assert(metrics.backtracked_assignments > 0);
+    assert(metrics.backtrack_events > 0);
+
+    printf("PASS: hard puzzle\n");
+
+    printf("  recursive calls       : %llu\n",
+           (unsigned long long)metrics.recursive_calls);
+
+    printf("  candidate checks      : %llu\n",
+           (unsigned long long)metrics.candidate_checks);
+
+    printf("  constraint rejections : %llu\n",
+           (unsigned long long)metrics.constraint_rejections);
+
+    printf("  committed assignments : %llu\n",
+           (unsigned long long)metrics.committed_assignments);
+
+    printf("  backtracked assigns   : %llu\n",
+           (unsigned long long)metrics.backtracked_assignments);
+
+    printf("  backtrack events      : %llu\n",
+           (unsigned long long)metrics.backtrack_events);
+
+    printf("  search nodes          : %llu\n",
+           (unsigned long long)metrics.search_nodes);
+
+    printf("  max depth             : %d\n",
+           metrics.max_depth);
+
+    printf("  solution depth        : %d\n",
+           metrics.solution_depth);
+}
 
 /* =========================================================
    MAIN TEST RUNNER
@@ -277,6 +360,9 @@ int main(void)
 
     test_standard_puzzle();
     test_determinism();
+    test_standard_puzzle();
+       test_hard_puzzle();
+       test_determinism();
 
     printf("---------------------------------\n");
     printf("ALL TESTS PASSED\n\n");
