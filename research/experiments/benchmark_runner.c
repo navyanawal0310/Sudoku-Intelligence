@@ -49,10 +49,10 @@ static int count_clues(int grid[SIZE][SIZE])
 int main(void)
 {
     const char *input_path =
-        "research/data/pilot/puzzles.csv";
+        "research/data/pilot/puzzles_100.csv";
 
     const char *output_path =
-        "research/results/solver_runs.csv";
+        "research/results/solver_runs_100.csv";
 
 
     FILE *input = fopen(input_path, "r");
@@ -142,23 +142,30 @@ int main(void)
         char *source =
             strtok(NULL, ",");
 
+        char *source_record_id =
+            strtok(NULL, ",");
+
         char *difficulty =
             strtok(NULL, ",");
 
+        char *sampling_seed =
+            strtok(NULL, ",");
 
         if (puzzle_id == NULL ||
             puzzle_string == NULL ||
             source == NULL ||
-            difficulty == NULL) {
+            source_record_id == NULL ||
+            difficulty == NULL ||
+            sampling_seed == NULL) {
 
-            fprintf(stderr,
-                    "WARNING: malformed CSV row skipped\n");
+            fprintf(
+                stderr,
+                "WARNING: malformed CSV row skipped\n"
+            );
 
             rejected++;
             continue;
         }
-
-
         total++;
 
 

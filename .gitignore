@@ -36,3 +36,6 @@ build/
 *.exe
 *.out
 *.o
+
+# External research datasets
+research/data/external/

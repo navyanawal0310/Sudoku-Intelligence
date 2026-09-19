@@ -2,7 +2,7 @@
 """
 generate_dataset.py
 
-Generates a benchmarking dataset for the Sudoku Intelligence Lab project.
+Generates a benchmarking dataset for the Algorithm Performance Laboratory project.
 
 Produces 1000 unique Sudoku puzzles (250 Easy, 250 Medium, 250 Hard,
 250 Expert) using the "dokusan" library (pip install dokusan) and writes

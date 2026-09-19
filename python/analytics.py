@@ -94,7 +94,7 @@ plt.close()
 
 with open("../reports/analysis_report.txt","w") as report:
 
-    report.write("Sudoku Intelligence Lab\n")
+    report.write("Algorithm Performance Laboratory\n")
     report.write("=======================\n\n")
 
     report.write(f"Total puzzles: {len(df)}\n")

@@ -4,10 +4,12 @@ from pathlib import Path
 from candidate_features import extract_candidate_features
 
 
-INPUT = Path("research/data/pilot/puzzles.csv")
+INPUT = Path(
+    "research/data/pilot/puzzles_100.csv"
+)
 
 OUTPUT = Path(
-    "research/results/structural_features.csv"
+    "research/results/structural_features_100.csv"
 )
 
 

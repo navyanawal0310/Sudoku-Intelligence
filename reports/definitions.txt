@@ -1,0 +1,12 @@
+| Metric                    | Definition                                                                            |
+| ------------------------- | ------------------------------------------------------------------------------------- |
+| `recursive_calls`         | Number of recursive solver invocations                                                |
+| `candidate_checks`        | Number of candidate values tested against Sudoku constraints                          |
+| `constraint_rejections`   | Candidate values rejected immediately because they violate row/column/box constraints |
+| `committed_assignments`   | Legal candidate values actually written into an empty cell                            |
+| `backtracked_assignments` | Previously committed assignments subsequently undone                                  |
+| `backtrack_events`        | Number of search decisions from which the solver retreats                             |
+| `max_depth`               | Maximum recursive search depth reached                                                |
+| `solution_depth`          | Depth at which the successful solution is found                                       |
+| `search_nodes`            | Number of explored search states                                                      |
+| `execution_time_ns`       | Wall/monotonic elapsed time for the solve                                             |

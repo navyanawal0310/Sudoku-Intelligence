@@ -45,3 +45,4 @@ def draw_sudoku(board, title="Sudoku Puzzle"):
     ax.set_title(title, fontsize=18)
 
     return fig
+
