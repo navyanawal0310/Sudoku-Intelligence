@@ -1,0 +1,4 @@
+puzzle_id,source,source_difficulty,clue_count,solver,solver_version,solved,solution_valid,recursive_calls,candidate_checks,constraint_rejections,committed_assignments,backtracked_assignments,backtrack_events,search_nodes,max_depth,solution_depth
+P001,manual,standard,30,BT_NAIVE,1.0,1,1,4209,37652,33444,4208,4157,2911,4209,51,51
+P002,manual,hard,21,BT_NAIVE,1.0,1,1,49559,445778,396220,49558,49498,33022,49559,60,60
+P003,manual,trivial,80,BT_NAIVE,1.0,1,1,2,9,8,1,0,0,2,1,1
