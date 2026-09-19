@@ -158,6 +158,7 @@ int main(void)
             difficulty == NULL ||
             sampling_seed == NULL) {
 
+                
             fprintf(
                 stderr,
                 "WARNING: malformed CSV row skipped\n"
