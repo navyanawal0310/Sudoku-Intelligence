@@ -31,7 +31,10 @@ def legal_candidates(grid, row, col):
 
     used = set(grid[row])
 
-    used.update(grid[r][col] for r in range(SIZE))
+    used.update(
+        grid[r][col]
+        for r in range(SIZE)
+    )
 
     box_row = (row // 3) * 3
     box_col = (col // 3) * 3
@@ -43,12 +46,86 @@ def legal_candidates(grid, row, col):
     return DIGITS - used
 
 
+def spatial_features(grid):
+    """
+    Measure the spatial distribution of clues
+    across rows, columns and 3x3 boxes.
+    """
+
+    row_clues = [
+        sum(1 for value in row if value != 0)
+        for row in grid
+    ]
+
+    column_clues = [
+        sum(
+            1
+            for row in range(SIZE)
+            if grid[row][col] != 0
+        )
+        for col in range(SIZE)
+    ]
+
+    box_clues = []
+
+    for box_row in range(0, SIZE, 3):
+        for box_col in range(0, SIZE, 3):
+
+            count = 0
+
+            for row in range(box_row, box_row + 3):
+                for col in range(box_col, box_col + 3):
+
+                    if grid[row][col] != 0:
+                        count += 1
+
+            box_clues.append(count)
+
+    def population_variance(values):
+
+        mean = sum(values) / len(values)
+
+        return sum(
+            (x - mean) ** 2
+            for x in values
+        ) / len(values)
+
+    return {
+        "row_clue_variance":
+            population_variance(row_clues),
+
+        "column_clue_variance":
+            population_variance(column_clues),
+
+        "box_clue_variance":
+            population_variance(box_clues),
+
+        "min_row_clues":
+            min(row_clues),
+
+        "max_row_clues":
+            max(row_clues),
+
+        "min_column_clues":
+            min(column_clues),
+
+        "max_column_clues":
+            max(column_clues),
+
+        "min_box_clues":
+            min(box_clues),
+
+        "max_box_clues":
+            max(box_clues),
+    }
+
+
 def extract_candidate_features(puzzle: str):
     """
-    Extract static candidate-domain features.
+    Extract pre-solve structural features.
 
-    IMPORTANT:
-    No recursive search is performed here.
+    No recursive search or solver-derived
+    information is used.
     """
 
     grid = parse_puzzle(puzzle)
@@ -60,36 +137,62 @@ def extract_candidate_features(puzzle: str):
 
             if grid[row][col] == 0:
 
-                candidates = legal_candidates(grid, row, col)
+                candidates = legal_candidates(
+                    grid,
+                    row,
+                    col
+                )
 
-                domain_sizes.append(len(candidates))
+                domain_sizes.append(
+                    len(candidates)
+                )
 
     empty_cells = len(domain_sizes)
     clue_count = 81 - empty_cells
 
+    # Handle a completely solved puzzle safely.
     if empty_cells == 0:
-        return {
-            "clue_count": 81,
+
+        features = {
+            "clue_count": clue_count,
             "empty_cells": 0,
+
             "mean_domain_size": 0.0,
             "domain_variance": 0.0,
+
             "min_domain_size": 0,
             "max_domain_size": 0,
+
             "singleton_count": 0,
             "singleton_ratio": 0.0,
+
             "pair_count": 0,
             "pair_ratio": 0.0,
+
             "triple_count": 0,
             "triple_ratio": 0.0,
+
             "candidate_domain_entropy": 0.0,
         }
 
+        features.update(
+            spatial_features(grid)
+        )
+
+        return features
+
     counts = Counter(domain_sizes)
 
-    mean_domain = sum(domain_sizes) / empty_cells
+    mean_domain = (
+        sum(domain_sizes)
+        / empty_cells
+    )
 
     variance = (
-        sum((d - mean_domain) ** 2 for d in domain_sizes)
+        sum(
+            (d - mean_domain) ** 2
+            for d in domain_sizes
+        )
         / empty_cells
     )
 
@@ -98,28 +201,57 @@ def extract_candidate_features(puzzle: str):
     triple_count = counts[3]
 
     candidate_domain_entropy = (
-        sum(math.log2(d) for d in domain_sizes if d > 0)
+        sum(
+            math.log2(d)
+            for d in domain_sizes
+            if d > 0
+        )
         / empty_cells
     )
 
-    return {
-        "clue_count": clue_count,
-        "empty_cells": empty_cells,
+    features = {
+        "clue_count":
+            clue_count,
 
-        "mean_domain_size": mean_domain,
-        "domain_variance": variance,
+        "empty_cells":
+            empty_cells,
 
-        "min_domain_size": min(domain_sizes),
-        "max_domain_size": max(domain_sizes),
+        "mean_domain_size":
+            mean_domain,
 
-        "singleton_count": singleton_count,
-        "singleton_ratio": singleton_count / empty_cells,
+        "domain_variance":
+            variance,
 
-        "pair_count": pair_count,
-        "pair_ratio": pair_count / empty_cells,
+        "min_domain_size":
+            min(domain_sizes),
 
-        "triple_count": triple_count,
-        "triple_ratio": triple_count / empty_cells,
+        "max_domain_size":
+            max(domain_sizes),
 
-        "candidate_domain_entropy": candidate_domain_entropy,
+        "singleton_count":
+            singleton_count,
+
+        "singleton_ratio":
+            singleton_count / empty_cells,
+
+        "pair_count":
+            pair_count,
+
+        "pair_ratio":
+            pair_count / empty_cells,
+
+        "triple_count":
+            triple_count,
+
+        "triple_ratio":
+            triple_count / empty_cells,
+
+        "candidate_domain_entropy":
+            candidate_domain_entropy,
     }
+
+    features.update(
+        spatial_features(grid)
+    )
+
+    return features

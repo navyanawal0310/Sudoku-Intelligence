@@ -54,6 +54,15 @@ def main():
         "triple_count",
         "triple_ratio",
         "candidate_domain_entropy",
+        "row_clue_variance",
+        "column_clue_variance",
+        "box_clue_variance",
+        "min_row_clues",
+        "max_row_clues",
+        "min_column_clues",
+        "max_column_clues",
+        "min_box_clues",
+        "max_box_clues",
     ]
 
     with OUTPUT.open(
