@@ -59,8 +59,6 @@ Sudoku-Intelligence/
 
 The recursive backtracking solver was instrumented to record detailed execution metrics for every benchmark puzzle.
 
-Rather than measuring execution time alone, the solver captures internal search behavior to better understand algorithm performance.
-
 | Metric | Description |
 |---|---|
 | Recursive Calls | Total number of recursive function invocations |
