@@ -5,32 +5,22 @@
 
 void reset_metrics(SolverMetrics *metrics)
 {
-    memset(
-        metrics,
-        0,
-        sizeof(SolverMetrics)
-    );
+    memset(metrics, 0, sizeof(SolverMetrics));
 }
 
 
-int is_valid_grid(
-    int grid[SIZE][SIZE]
-)
+int is_valid_grid(int grid[SIZE][SIZE])
 {
-    /* Rows */
     for (int row = 0; row < SIZE; row++) {
-
         int seen[10] = {0};
 
         for (int col = 0; col < SIZE; col++) {
-
             int value = grid[row][col];
 
             if (value < 0 || value > 9)
                 return 0;
 
             if (value != 0) {
-
                 if (seen[value])
                     return 0;
 
@@ -39,17 +29,13 @@ int is_valid_grid(
         }
     }
 
-    /* Columns */
     for (int col = 0; col < SIZE; col++) {
-
         int seen[10] = {0};
 
         for (int row = 0; row < SIZE; row++) {
-
             int value = grid[row][col];
 
             if (value != 0) {
-
                 if (seen[value])
                     return 0;
 
@@ -58,19 +44,15 @@ int is_valid_grid(
         }
     }
 
-    /* 3x3 boxes */
     for (int box_row = 0; box_row < SIZE; box_row += 3) {
         for (int box_col = 0; box_col < SIZE; box_col += 3) {
-
             int seen[10] = {0};
 
             for (int row = box_row; row < box_row + 3; row++) {
                 for (int col = box_col; col < box_col + 3; col++) {
-
                     int value = grid[row][col];
 
                     if (value != 0) {
-
                         if (seen[value])
                             return 0;
 
@@ -96,41 +78,26 @@ int is_safe(
     metrics->candidate_checks++;
 
     for (int x = 0; x < SIZE; x++) {
-
         if (grid[row][x] == num) {
-
             metrics->constraint_rejections++;
-
             return 0;
         }
     }
 
     for (int x = 0; x < SIZE; x++) {
-
         if (grid[x][col] == num) {
-
             metrics->constraint_rejections++;
-
             return 0;
         }
     }
 
-    int start_row =
-        row - row % 3;
-
-    int start_col =
-        col - col % 3;
+    int start_row = row - row % 3;
+    int start_col = col - col % 3;
 
     for (int r = 0; r < 3; r++) {
         for (int c = 0; c < 3; c++) {
-
-            if (
-                grid[start_row + r][start_col + c]
-                == num
-            ) {
-
+            if (grid[start_row + r][start_col + c] == num) {
                 metrics->constraint_rejections++;
-
                 return 0;
             }
         }
@@ -141,16 +108,8 @@ int is_safe(
 
 
 /*
- * IMPORTANT:
- *
- * Candidate counting for MRV selection is deliberately
- * NOT passed the SolverMetrics structure.
- *
- * The purpose is to keep search instrumentation
- * comparable with BT_NAIVE.
- *
- * These checks belong to the variable-selection
- * heuristic rather than candidate exploration.
+ * Candidate tests used only to select the MRV cell.
+ * These are deliberately NOT counted in candidate_checks.
  */
 static int candidate_is_legal(
     int grid[SIZE][SIZE],
@@ -160,30 +119,21 @@ static int candidate_is_legal(
 )
 {
     for (int x = 0; x < SIZE; x++) {
-
         if (grid[row][x] == num)
             return 0;
     }
 
     for (int x = 0; x < SIZE; x++) {
-
         if (grid[x][col] == num)
             return 0;
     }
 
-    int start_row =
-        row - row % 3;
-
-    int start_col =
-        col - col % 3;
+    int start_row = row - row % 3;
+    int start_col = col - col % 3;
 
     for (int r = 0; r < 3; r++) {
         for (int c = 0; c < 3; c++) {
-
-            if (
-                grid[start_row + r][start_col + c]
-                == num
-            )
+            if (grid[start_row + r][start_col + c] == num)
                 return 0;
         }
     }
@@ -201,15 +151,7 @@ static int count_candidates(
     int count = 0;
 
     for (int num = 1; num <= 9; num++) {
-
-        if (
-            candidate_is_legal(
-                grid,
-                row,
-                col,
-                num
-            )
-        )
+        if (candidate_is_legal(grid, row, col, num))
             count++;
     }
 
@@ -218,14 +160,10 @@ static int count_candidates(
 
 
 /*
- * Select the empty cell with Minimum Remaining Values.
+ * MRV variable selection.
  *
- * Tie-breaking rule:
- * first cell encountered in row-major order.
- *
- * Returns:
- *  1 -> empty cell selected
- *  0 -> no empty cells remain
+ * Tie-breaking is deterministic:
+ * first minimum encountered in row-major order.
  */
 static int find_mrv_cell(
     int grid[SIZE][SIZE],
@@ -234,7 +172,6 @@ static int find_mrv_cell(
 )
 {
     int best_count = 10;
-
     int found = 0;
 
     for (int row = 0; row < SIZE; row++) {
@@ -243,29 +180,18 @@ static int find_mrv_cell(
             if (grid[row][col] != 0)
                 continue;
 
-            int count =
-                count_candidates(
-                    grid,
-                    row,
-                    col
-                );
+            int count = count_candidates(
+                grid,
+                row,
+                col
+            );
 
-            /*
-             * A zero-domain cell is immediately
-             * the most constrained cell.
-             */
             if (count < best_count) {
-
                 best_count = count;
-
                 *selected_row = row;
                 *selected_col = col;
-
                 found = 1;
 
-                /*
-                 * Cannot improve beyond zero.
-                 */
                 if (best_count == 0)
                     return 1;
             }
@@ -291,16 +217,8 @@ static int solve_recursive(
     int row;
     int col;
 
-    if (
-        !find_mrv_cell(
-            grid,
-            &row,
-            &col
-        )
-    ) {
-
+    if (!find_mrv_cell(grid, &row, &col)) {
         metrics->solution_depth = depth;
-
         return 1;
     }
 
@@ -308,33 +226,27 @@ static int solve_recursive(
 
     for (int num = 1; num <= 9; num++) {
 
-        if (
-            is_safe(
-                grid,
-                row,
-                col,
-                num,
-                metrics
-            )
-        ) {
-
+        if (is_safe(
+            grid,
+            row,
+            col,
+            num,
+            metrics
+        )) {
             explored_legal_candidate = 1;
 
             grid[row][col] = num;
-
             metrics->committed_assignments++;
 
-            if (
-                solve_recursive(
-                    grid,
-                    metrics,
-                    depth + 1
-                )
-            )
+            if (solve_recursive(
+                grid,
+                metrics,
+                depth + 1
+            )) {
                 return 1;
+            }
 
             grid[row][col] = 0;
-
             metrics->backtracked_assignments++;
         }
     }
@@ -356,21 +268,14 @@ int solve_sudoku(
     if (!is_valid_grid(grid))
         return 0;
 
-    return solve_recursive(
-        grid,
-        metrics,
-        0
-    );
+    return solve_recursive(grid, metrics, 0);
 }
 
 
-int is_valid_solution(
-    int grid[SIZE][SIZE]
-)
+int is_valid_solution(int grid[SIZE][SIZE])
 {
     for (int row = 0; row < SIZE; row++) {
         for (int col = 0; col < SIZE; col++) {
-
             if (grid[row][col] == 0)
                 return 0;
         }
